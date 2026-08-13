@@ -1,11 +1,11 @@
 # ToBe
+<div align="center">
+    <a href="https://nobeta.cn/tobe"><img alt="tobe logo" src="https://nobeta.cn/i/2026/08/13/b49782.webp" width="256"></a>
+    
+### To be a real being
 
-<p align="center">
-    <a href="https://nobeta.cn/tobe"><img alt="tobe logo" src="https://nobeta.cn/i/2026/08/13/6c7c3d.webp" width="128"></a>
-</p>
-<p align="center">
-    <em> To be a real being </em>
-</p>
+</div>
+
 
 **ToBe** 期望孕育一个数字主体：
 
