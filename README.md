@@ -4,7 +4,6 @@
 > To be a real being in a world.
 
 **ToBe** 期望孕育一个数字主体：
-
 - *only* : 每一个 ToBe 主体都具有稳定的实例连续性。
   - 不可随意变更的身份核心
   - 可缓慢演化的人格与关系
@@ -13,7 +12,7 @@
 - *multi*: 丰富的感知与广阔的执行边界
 
 > [!note]
-> 当前版本，各模块先以 pi.extension 加载实现 MVP。
+> 各模块以 pi.extension 加载实现。
 
 ```mermaid
 ---
@@ -58,7 +57,7 @@ flowchart LR
 
 允许感知层提供交互接口，交互是感知的延申。感知与交互由对应的 Adapter 承诺。
 
-> [Env Source] → [Awareness Adapter] → [Awareness Layer] → [Agent]
+> 默认提供的 Adapters: `iirose-dapter`、`feishu-adapter`、`wechat-adapter`
 
 ## Plan
 
