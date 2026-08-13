@@ -10,5 +10,8 @@
     "@types/node": "^22.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.73.0"
   }
 }
