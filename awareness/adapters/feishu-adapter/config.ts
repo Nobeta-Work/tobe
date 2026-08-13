@@ -9,7 +9,7 @@ export interface FeishuConfig {
   nickname: string;
   credentials: {
     appId: string;
-    /** 环境变量名；为兼容早期测试配置，找不到同名变量时也可作为临时字面值。 */
+    /** 存放 App Secret 的环境变量名。 */
     appSecretEnv: string;
     appSecret?: string;
   };
@@ -112,15 +112,23 @@ export function loadConfig(path = DEFAULT_CONFIG_PATH): FeishuConfig {
 }
 
 export function resolveAppSecret(config: FeishuConfig): string {
-  if (config.credentials.appSecret) return config.credentials.appSecret;
-  const reference = config.credentials.appSecretEnv;
-  return process.env[reference] ?? reference;
+  if (config.credentials.appSecret?.trim()) return config.credentials.appSecret.trim();
+  const reference = config.credentials.appSecretEnv.trim();
+  return reference ? process.env[reference]?.trim() ?? "" : "";
 }
 
 /** 凭证是运行条件，不是 Adapter 被发现和注册的条件。 */
 export function feishuConfigurationError(config: FeishuConfig): string | undefined {
   if (!config.credentials.appId.trim()) return "credentials.appId is required";
-  if (!resolveAppSecret(config).trim()) return "Feishu app secret is required";
+  if (!/^cli_[0-9a-fA-F]{16}$/.test(config.credentials.appId.trim())) {
+    return "credentials.appId must match cli_ followed by 16 hexadecimal characters";
+  }
+  if (!resolveAppSecret(config)) {
+    const reference = config.credentials.appSecretEnv.trim();
+    return reference
+      ? `Feishu app secret environment variable is not set: ${reference}`
+      : "Feishu app secret is required";
+  }
   return undefined;
 }
 

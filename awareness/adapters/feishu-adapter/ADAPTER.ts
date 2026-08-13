@@ -7,6 +7,7 @@ import { FeishuParticipationClassifier } from "./classifier.ts";
 import { assertFeishuConfigured, feishuConfigurationError, loadConfig, type FeishuConfig, type FeishuReceiveIdType } from "./config.ts";
 import { eventTimestamp, observationId, parseMessageContent, type FeishuMessageEvent } from "./protocol.ts";
 import { LarkSdkGateway, type FeishuGateway } from "./scripts/client.ts";
+import type { FeishuConnectionEvent } from "./scripts/client.ts";
 import { runCommand } from "./scripts/help.ts";
 import { listen } from "./scripts/listen.ts";
 import { sendMessage } from "./scripts/send-message.ts";
@@ -46,7 +47,10 @@ export class FeishuAdapter implements EnvAdapter {
     if (this.#health.status === "starting" || this.#health.status === "online") return;
     this.#setHealth("starting");
     try {
-      await listen(this.#getGateway(), (event) => this.handleMessageEvent(event));
+      await this.#getGateway().connect(
+        (event) => this.handleMessageEvent(event),
+        (event) => this.#handleConnectionEvent(event),
+      );
       this.#setHealth("online");
       await this.#emitLifecycle("adapter.started", "Feishu adapter started");
     } catch (error) {
@@ -190,6 +194,15 @@ export class FeishuAdapter implements EnvAdapter {
 
   #setHealth(status: AdapterHealth["status"], detail?: string): void {
     this.#health = { status, since: Date.now(), ...(this.#health.lastEventAt ? { lastEventAt: this.#health.lastEventAt } : {}), ...(detail ? { detail } : {}) };
+  }
+
+  #handleConnectionEvent(event: FeishuConnectionEvent): void {
+    switch (event.state) {
+      case "connected": this.#setHealth("online"); break;
+      case "reconnecting": this.#setHealth("degraded", "Feishu long connection is reconnecting"); break;
+      case "reconnected": this.#setHealth("online"); break;
+      case "failed": this.#setHealth("error", errorMessage(event.error)); break;
+    }
   }
 
   #getGateway(): FeishuGateway {

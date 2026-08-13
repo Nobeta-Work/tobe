@@ -39,7 +39,11 @@ interface SdkBot {
 }
 
 type BotConstructor = new (options: Record<string, unknown>) => SdkBot;
-const importModule = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<Record<string, unknown>>;
+
+async function importModule(specifier: string): Promise<Record<string, unknown>> {
+  const resolved = import.meta.resolve(specifier);
+  return import(resolved) as Promise<Record<string, unknown>>;
+}
 
 export class SdkWeChatGateway implements WeChatGateway {
   readonly #config: WeChatConfig;

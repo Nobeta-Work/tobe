@@ -4,22 +4,42 @@ import { resolveAppSecret } from "../config.ts";
 import type { FeishuMessageEvent } from "../protocol.ts";
 
 export interface SentFeishuMessage { messageId: string; chatId?: string }
+export type FeishuConnectionEvent =
+  | { state: "connected" | "reconnecting" | "reconnected" }
+  | { state: "failed"; error: Error };
+export type FeishuConnectionListener = (event: FeishuConnectionEvent) => void | Promise<void>;
 
 export interface FeishuGateway {
-  connect(onMessage: (event: FeishuMessageEvent) => void | Promise<void>): Promise<void>;
+  connect(
+    onMessage: (event: FeishuMessageEvent) => void | Promise<void>,
+    onConnectionEvent?: FeishuConnectionListener,
+  ): Promise<void>;
   disconnect(): Promise<void>;
   connectionState(): string;
   sendText(receiveId: string, receiveIdType: FeishuReceiveIdType, text: string, uuid: string): Promise<SentFeishuMessage>;
   replyText(messageId: string, text: string, replyInThread: boolean, uuid: string): Promise<SentFeishuMessage>;
 }
 
+interface WsClientLike {
+  start(params: { eventDispatcher: Lark.EventDispatcher }): Promise<void>;
+  close(params?: { force?: boolean }): void;
+  getConnectionStatus(): { state: string };
+}
+
+type WsClientFactory = (params: ConstructorParameters<typeof Lark.WSClient>[0]) => WsClientLike;
+export interface LarkSdkGatewayOptions { createWsClient?: WsClientFactory }
+
 export class LarkSdkGateway implements FeishuGateway {
   readonly #config: FeishuConfig;
   readonly #client: Lark.Client;
-  #ws: Lark.WSClient | null = null;
+  readonly #createWsClient: WsClientFactory;
+  #ws: WsClientLike | null = null;
+  #connectTask: Promise<void> | null = null;
+  #rejectPendingConnect: ((error: Error) => void) | null = null;
 
-  constructor(config: FeishuConfig) {
+  constructor(config: FeishuConfig, options: LarkSdkGatewayOptions = {}) {
     this.#config = config;
+    this.#createWsClient = options.createWsClient ?? ((params) => new Lark.WSClient(params));
     const base = { appId: config.credentials.appId, appSecret: resolveAppSecret(config) };
     this.#client = new Lark.Client({
       ...base,
@@ -29,24 +49,54 @@ export class LarkSdkGateway implements FeishuGateway {
     });
   }
 
-  async connect(onMessage: (event: FeishuMessageEvent) => void | Promise<void>): Promise<void> {
-    if (this.#ws && this.connectionState() !== "idle" && this.connectionState() !== "failed") return;
+  async connect(
+    onMessage: (event: FeishuMessageEvent) => void | Promise<void>,
+    onConnectionEvent?: FeishuConnectionListener,
+  ): Promise<void> {
+    if (this.connectionState() === "connected") return;
+    if (this.#connectTask) return this.#connectTask;
     const base = { appId: this.#config.credentials.appId, appSecret: resolveAppSecret(this.#config) };
-    this.#ws = new Lark.WSClient({
-      ...base,
-      loggerLevel: Lark.LoggerLevel.error,
-      autoReconnect: this.#config.connection.autoReconnect,
-      handshakeTimeoutMs: this.#config.connection.handshakeTimeoutMs,
-      wsConfig: { pingTimeout: this.#config.connection.pingTimeoutSeconds },
-      source: "tobe-feishu-adapter",
-    });
     const dispatcher = new Lark.EventDispatcher({}).register({
       "im.message.receive_v1": async (data) => onMessage(data as FeishuMessageEvent),
     });
-    await this.#ws.start({ eventDispatcher: dispatcher });
+    this.#connectTask = new Promise<void>((resolve, reject) => {
+      let initialSettled = false;
+      const settleReady = () => {
+        if (initialSettled) return;
+        initialSettled = true;
+        this.#rejectPendingConnect = null;
+        resolve();
+      };
+      const settleError = (error: Error) => {
+        void onConnectionEvent?.({ state: "failed", error });
+        if (initialSettled) return;
+        initialSettled = true;
+        this.#rejectPendingConnect = null;
+        reject(error);
+      };
+      this.#rejectPendingConnect = settleError;
+      this.#ws = this.#createWsClient({
+        ...base,
+        loggerLevel: Lark.LoggerLevel.error,
+        autoReconnect: this.#config.connection.autoReconnect,
+        handshakeTimeoutMs: this.#config.connection.handshakeTimeoutMs,
+        wsConfig: { pingTimeout: this.#config.connection.pingTimeoutSeconds },
+        source: "tobe-feishu-adapter",
+        onReady: () => { void onConnectionEvent?.({ state: "connected" }); settleReady(); },
+        onError: settleError,
+        onReconnecting: () => { void onConnectionEvent?.({ state: "reconnecting" }); },
+        onReconnected: () => { void onConnectionEvent?.({ state: "reconnected" }); },
+      });
+      void this.#ws.start({ eventDispatcher: dispatcher }).catch((error: unknown) => {
+        settleError(asError(error));
+      });
+    }).finally(() => { this.#connectTask = null; });
+    return this.#connectTask;
   }
 
   async disconnect(): Promise<void> {
+    this.#rejectPendingConnect?.(new Error("Feishu connection was closed before it became ready"));
+    this.#rejectPendingConnect = null;
     this.#ws?.close({ force: false });
     this.#ws = null;
   }
@@ -75,3 +125,5 @@ export class LarkSdkGateway implements FeishuGateway {
 function assertResponse(code?: number, message?: string): void {
   if (code !== undefined && code !== 0) throw new Error(`Feishu API error ${code}: ${message ?? "unknown error"}`);
 }
+
+function asError(error: unknown): Error { return error instanceof Error ? error : new Error(String(error)); }
