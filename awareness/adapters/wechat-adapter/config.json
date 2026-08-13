@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "autoStart": true,
+  "storageDir": "./data",
+  "logLevel": "warn",
+  "botAgent": "ToBe/wechat-adapter",
+  "identity": {
+    "ownerIds": []
+  },
+  "receive": {
+    "messageTypes": ["text"],
+    "allowUsers": [],
+    "denyUsers": []
+  },
+  "events": {
+    "dedupeTtlMs": 3600000,
+    "messageCacheTtlMs": 3600000,
+    "maxCachedMessages": 500
+  }
+}

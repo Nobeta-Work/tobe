@@ -38,6 +38,18 @@ flowchart LR
     AAdap ~~~|过滤转换| AEng
 ```
 
+## Quick Start
+
+```bash
+
+pi install git:github.com/Nobeta-Work/tobe
+
+```
+
+*注意：所有 adapters 默认禁用，需填写配置信息后调度启动。*
+*当前版本不保证 `pi update` 能无冲突保留 SELF、USER、Dream 和自动生成的 Skills*
+
+
 ## Memory
 
 感知世界的流动，活在当下；让认知与画像不断更新，让已有的经验沉淀，让事件留下深浅的印象。

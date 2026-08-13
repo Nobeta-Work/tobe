@@ -1,0 +1,28 @@
+{
+  "enabled": true,
+  "autoStart": false,
+  "nickname": "ToBe",
+  "credentials": {
+    "appId": "",
+    "appSecretEnv": ""
+  },
+  "identity": {
+    "idType": "open_id",
+    "adminsIds": []
+  },
+  "receive": {
+    "directMessages": true,
+    "groupMessages": true,
+    "requireMentionInGroup": true,
+    "allowChats": [],
+    "denyChats": [],
+    "ignoreBotMessages": true,
+    "messageTypes": ["text", "post", "image", "file", "audio"]
+  },
+  "commands": {
+    "enabled": true,
+    "prefix": "/",
+    "adminOnly": false,
+    "whiteList": ["help", "status", "ping"]
+  }
+}
