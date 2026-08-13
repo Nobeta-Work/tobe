@@ -1,21 +1,21 @@
 # ToBe
 <div align="center">
     <a href="https://nobeta.cn/tobe"><img alt="tobe logo" src="https://nobeta.cn/i/2026/08/13/b49782.webp" width="256"></a>
-    
+
 ### To be a real being
 
 </div>
 
 
-**ToBe** 期望孕育一个数字主体：
+**ToBe** 致力于孕育具备独立人格的数字主体：
 
-- *only* : 每一个 ToBe 主体都具有稳定的实例连续性。
-- *grow* :
-- *multi*: 丰富的感知与广阔的执行边界
+- **only** : 每一个 ToBe 主体都具有稳定的实例连续性。
+- **grow** : 随交互经历持续自主演进，具备随时间生长的生命力。
+- **multi**: 多感知接入与多形态执行，持续扩展丰富的感知与广阔的表达边界。
 
-> 使用 Pi 为 Agent ，各模块以 Pi Extension 加载实现。
 
 ```mermaid
+
 ---
 title: 业务架构图
 ---
@@ -30,11 +30,17 @@ flowchart LR
     A[[Agent]]
     M[(Memory)]
 
-
     Env -->|感知| AAdap --> Env
     AEng --> A -->|交互| AEng
     A <-->|沉淀| M
     AAdap ~~~|过滤转换| AEng
+
+    style Env fill:#e8e8e8,stroke:#9e9e9e,color:#333
+    style Awa fill:#e3f2fd,stroke:#1e88e5,color:#0d47a1
+    style AAdap fill:#bbdefb,stroke:#1976d2,color:#0d47a1
+    style AEng fill:#90caf9,stroke:#1565c0,color:#0d47a1
+    style A fill:#ffb74d,stroke:#f57c00,color:#4e2e00
+    style M fill:#a5d6a7,stroke:#388e3c,color:#1b5e20
 
 ```
 
