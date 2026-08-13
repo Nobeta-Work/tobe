@@ -2,7 +2,7 @@
 <div align="center">
     <a href="https://nobeta.cn/tobe"><img alt="tobe logo" src="https://nobeta.cn/i/2026/08/13/b49782.webp" width="256"></a>
 
-### To be a real being
+### To Be a real Being.
 
 </div>
 
