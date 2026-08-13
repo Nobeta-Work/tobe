@@ -48,11 +48,10 @@ Pi Agent
 
 ```text
 awareness/
-├── index.ts       # Pi extension 入口
+├── index.ts       # Pi extension 入口、Adapter 扫描与主动消息推送
 ├── adapter.ts     # 全局 Adapter/Engine 类型
 ├── type.ts        # 环境无关数据与 function-call 信封
-├── loader.ts      # ADAPTER.ts 扫描器
-├── engine/        # 注册、路由、attention 聚合
+├── engine.ts      # 感知聚合、缓冲与路由引擎
 ├── tools/         # awareness_observe / awareness_interact
 └── adapters/      # 环境个性化实现
 ```

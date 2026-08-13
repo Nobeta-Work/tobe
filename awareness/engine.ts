@@ -5,14 +5,14 @@ import type {
   ObservationListener,
   RegisteredAdapter,
   Unsubscribe,
-} from "../adapter.ts";
+} from "./adapter.ts";
 import type {
   AdapterCallResult,
   EngineConfig,
   Interaction,
   Observation,
   ObserveRequest,
-} from "../type.ts";
+} from "./type.ts";
 
 const ENGINE_ADAPTER_ID = "awareness-engine";
 const DEFAULT_CONFIG: EngineConfig = {

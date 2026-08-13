@@ -117,12 +117,22 @@ export function resolveAppSecret(config: FeishuConfig): string {
   return process.env[reference] ?? reference;
 }
 
+/** 凭证是运行条件，不是 Adapter 被发现和注册的条件。 */
+export function feishuConfigurationError(config: FeishuConfig): string | undefined {
+  if (!config.credentials.appId.trim()) return "credentials.appId is required";
+  if (!resolveAppSecret(config).trim()) return "Feishu app secret is required";
+  return undefined;
+}
+
+export function assertFeishuConfigured(config: FeishuConfig): void {
+  const message = feishuConfigurationError(config);
+  if (message) throw new Error(`feishu-adapter is not configured: ${message}`);
+}
+
 function assertConfig(config: FeishuConfig): void {
   if (typeof config.enabled !== "boolean" || typeof config.autoStart !== "boolean") {
     throw new Error("config.enabled and config.autoStart must be boolean");
   }
-  if (!config.credentials.appId.trim()) throw new Error("credentials.appId is required");
-  if (!resolveAppSecret(config).trim()) throw new Error("Feishu app secret is required");
   if (!Array.isArray(config.identity.adminsIds) || config.identity.adminsIds.some((id) => typeof id !== "string")) {
     throw new Error("identity.adminsIds must be a string array");
   }

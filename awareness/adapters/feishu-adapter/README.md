@@ -23,7 +23,7 @@ feishu-adapter/
 3. 事件订阅选择长连接，订阅 `im.message.receive_v1`。
 4. 将 owner 的 `open_id` 填入 `identity.adminsIds`。
 
-Adapter 默认 `autoStart=false`，extension 会扫描注册但不会连接。通过 `awareness_interact/connect` 启动，或确认配置后开启自动启动。
+Adapter 默认 `autoStart=false`，extension 会扫描注册但不会连接。缺少凭证时仍会正常注册，并在状态中标记为未配置，不会阻断 Awareness 或其他 Adapter；只有执行 `connect`、发送或回复时才返回明确的配置错误。通过 `awareness_interact/connect` 启动，或确认配置后开启自动启动。
 
 ## Credentials
 

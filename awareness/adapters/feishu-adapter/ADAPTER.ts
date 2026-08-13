@@ -4,7 +4,7 @@ import type { AdapterHealth, EnvAdapter, ObservationListener, Unsubscribe } from
 import type { AdapterCallResult, Interaction, Level, Observation, ObserveRequest } from "../../type.ts";
 import { classifyFeishuActor } from "./actor.ts";
 import { FeishuParticipationClassifier } from "./classifier.ts";
-import { loadConfig, type FeishuConfig, type FeishuReceiveIdType } from "./config.ts";
+import { assertFeishuConfigured, feishuConfigurationError, loadConfig, type FeishuConfig, type FeishuReceiveIdType } from "./config.ts";
 import { eventTimestamp, observationId, parseMessageContent, type FeishuMessageEvent } from "./protocol.ts";
 import { LarkSdkGateway, type FeishuGateway } from "./scripts/client.ts";
 import { runCommand } from "./scripts/help.ts";
@@ -25,7 +25,7 @@ export class FeishuAdapter implements EnvAdapter {
   readonly autoStart: boolean;
 
   readonly #config: FeishuConfig;
-  readonly #gateway: FeishuGateway;
+  #gateway: FeishuGateway | undefined;
   readonly #classifier: FeishuParticipationClassifier;
   readonly #listeners = new Set<ObservationListener>();
   readonly #seen = new Map<string, number>();
@@ -33,17 +33,20 @@ export class FeishuAdapter implements EnvAdapter {
 
   constructor(options: FeishuAdapterOptions = {}) {
     this.#config = options.config ?? loadConfig(options.configPath);
-    this.autoStart = this.#config.enabled && this.#config.autoStart;
-    this.#gateway = options.gateway ?? new LarkSdkGateway(this.#config);
+    const configurationError = feishuConfigurationError(this.#config);
+    this.autoStart = this.#config.enabled && this.#config.autoStart && !configurationError;
+    this.#gateway = options.gateway;
+    if (configurationError) this.#health = { status: "stopped", since: Date.now(), detail: configurationError };
     this.#classifier = new FeishuParticipationClassifier(this.#config.assessment);
   }
 
   async start(): Promise<void> {
     if (!this.#config.enabled) throw new Error("feishu-adapter is disabled in config.json");
+    assertFeishuConfigured(this.#config);
     if (this.#health.status === "starting" || this.#health.status === "online") return;
     this.#setHealth("starting");
     try {
-      await listen(this.#gateway, (event) => this.handleMessageEvent(event));
+      await listen(this.#getGateway(), (event) => this.handleMessageEvent(event));
       this.#setHealth("online");
       await this.#emitLifecycle("adapter.started", "Feishu adapter started");
     } catch (error) {
@@ -53,7 +56,7 @@ export class FeishuAdapter implements EnvAdapter {
   }
 
   async stop(): Promise<void> {
-    await this.#gateway.disconnect();
+    await this.#gateway?.disconnect();
     await this.#emitLifecycle("adapter.stopped", "Feishu adapter stopped");
     this.#setHealth("stopped");
   }
@@ -61,7 +64,8 @@ export class FeishuAdapter implements EnvAdapter {
   async observe(request: ObserveRequest): Promise<AdapterCallResult> {
     if (request.action === "status") {
       return this.#result(request.call_id, request.action, {
-        status: "success", health: this.health(), connection: this.#gateway.connectionState(),
+        status: "success", health: this.health(), configured: !feishuConfigurationError(this.#config),
+        connection: this.#gateway?.connectionState() ?? "idle",
       });
     }
     return this.#result(request.call_id, request.action, { status: "error", message: `Unsupported observe action: ${request.action}` });
@@ -86,7 +90,8 @@ export class FeishuAdapter implements EnvAdapter {
         const receiveIdType = optionalReceiveIdType(interaction.args.receiveIdType);
         const replyInThread = interaction.args.replyInThread;
         if (replyInThread !== undefined && typeof replyInThread !== "boolean") throw new Error("replyInThread must be boolean");
-        const sent = await sendMessage(this.#gateway, this.#config, {
+        assertFeishuConfigured(this.#config);
+        const sent = await sendMessage(this.#getGateway(), this.#config, {
           content,
           ...(receiveId ? { receiveId } : {}),
           ...(receiveIdType ? { receiveIdType } : {}),
@@ -138,7 +143,7 @@ export class FeishuAdapter implements EnvAdapter {
       if (command.handled) {
         if ((!this.#config.commands.adminOnly || owner) && command.response) {
           try {
-            await sendMessage(this.#gateway, this.#config, { content: command.response, messageId: message.message_id, replyInThread: false });
+            await sendMessage(this.#getGateway(), this.#config, { content: command.response, messageId: message.message_id, replyInThread: false });
           } catch (error) { this.#setHealth("degraded", errorMessage(error)); }
         }
         return;
@@ -185,6 +190,11 @@ export class FeishuAdapter implements EnvAdapter {
 
   #setHealth(status: AdapterHealth["status"], detail?: string): void {
     this.#health = { status, since: Date.now(), ...(this.#health.lastEventAt ? { lastEventAt: this.#health.lastEventAt } : {}), ...(detail ? { detail } : {}) };
+  }
+
+  #getGateway(): FeishuGateway {
+    assertFeishuConfigured(this.#config);
+    return this.#gateway ??= new LarkSdkGateway(this.#config);
   }
 
   #result(call_id: string, action: string, content: unknown): AdapterCallResult {

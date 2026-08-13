@@ -1,8 +1,0 @@
-{
-  "name": "@tobe/wechat-adapter",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@wechatbot/wechatbot": "^2.2.0"
-  }
-}

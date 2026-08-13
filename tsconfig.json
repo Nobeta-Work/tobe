@@ -13,6 +13,12 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "awareness/**/*.ts",
+    "memory/**/*.ts",
+    "live/**/*.ts",
+    "agent/**/*.ts",
+    "runtime/**/*.ts"
+  ],
+  "exclude": ["node_modules", "tmp"]
 }

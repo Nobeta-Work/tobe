@@ -1,15 +1,68 @@
+import { access, readdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { fileURLToPath } from "node:url";
-import { AwarenessEngineImpl } from "./engine/engine.ts";
-import { discoverAdapters } from "./loader.ts";
-import { subscribeAgentPush } from "./push.ts";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import type { AdapterFactory, AwarenessEngine, EnvAdapter, Unsubscribe } from "./adapter.ts";
+import { AwarenessEngineImpl } from "./engine.ts";
 import { registerAwarenessTools } from "./tools/index.ts";
+import type { Observation } from "./type.ts";
 
 export * from "./type.ts";
 export * from "./adapter.ts";
-export { AwarenessEngineImpl } from "./engine/engine.ts";
-export { discoverAdapters } from "./loader.ts";
-export { subscribeAgentPush, pushObservation } from "./push.ts";
+export { AwarenessEngineImpl } from "./engine.ts";
+
+interface AdapterModule {
+  createAdapter?: AdapterFactory;
+  default?: AdapterFactory;
+}
+
+const DEFAULT_ADAPTERS_DIR = fileURLToPath(new URL("./adapters", import.meta.url));
+
+/** 仅加载 adapters/<name>/ADAPTER.ts；其他文件不会被当作入口执行。 */
+export async function discoverAdapters(adaptersDir = DEFAULT_ADAPTERS_DIR): Promise<EnvAdapter[]> {
+  const entries = await readdir(adaptersDir, { withFileTypes: true });
+  const adapters: EnvAdapter[] = [];
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isDirectory()) continue;
+    const entryPath = join(adaptersDir, entry.name, "ADAPTER.ts");
+    try { await access(entryPath); } catch { continue; }
+    let module: AdapterModule;
+    try { module = await import(pathToFileURL(entryPath).href) as AdapterModule; }
+    catch (error) { throw new Error(`Failed to load adapter entry ${entryPath}`, { cause: error }); }
+    const factory = module.createAdapter ?? module.default;
+    if (typeof factory !== "function") {
+      throw new Error(`${entryPath} must export createAdapter() or a default factory`);
+    }
+    adapters.push(await factory());
+  }
+  return adapters;
+}
+
+export function adapterDirectory(entryUrl: string): string {
+  return dirname(fileURLToPath(entryUrl));
+}
+
+/** 把 Engine subscription 桥接为 Pi 会话消息，从而主动唤起 Agent。 */
+export function subscribeAgentPush(pi: ExtensionAPI, engine: AwarenessEngine): Unsubscribe {
+  return engine.subscribe((observation) => pushObservation(pi, observation));
+}
+
+export function pushObservation(pi: ExtensionAPI, observation: Observation): void {
+  pi.sendMessage(
+    {
+      customType: "awareness-observation",
+      content: JSON.stringify(observation),
+      display: false,
+      details: observation,
+    },
+    {
+      triggerTurn: true,
+      deliverAs: observation.attention === "high" || observation.attention === "max"
+        ? "steer"
+        : "followUp",
+    },
+  );
+}
 
 /** Pi extension 入口。Pi 负责调用；import 本文件本身不会启动网络连接。 */
 export default async function awarenessExtension(pi: ExtensionAPI): Promise<void> {
