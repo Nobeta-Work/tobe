@@ -1,6 +1,6 @@
 {
-  "enabled": true,
-  "autoStart": true,
+  "enabled": false,
+  "autoStart": false,
   "storageDir": "./data",
   "logLevel": "warn",
   "botAgent": "ToBe/wechat-adapter",
