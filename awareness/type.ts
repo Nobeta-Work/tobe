@@ -1,49 +1,55 @@
-
-/** Adapter */
-export interface EnvAdapter {
-    id: string | null;
-    name: string;
-    autoStart: boolean;
-    start(args: Record<string, any>): Observation;
-    stop(): void;
-    observe(): Observation;
-    interact(args: Record<string, any>): Observation;
-    health(): boolean;
-    /** Agent操作角度： off:'Agent可任意修改adapter',low:'Agent可写，但需高级消息的用户确认',medium:'Agent可写可改开关，但需高级消息的用户确认',high:'只有max消息可确认开关，不可修改',max:'agent不可写不可改的adapter，只能用户手动维护' */
-    permission: Level;
-    getSkillPaths(): string[] | null;
+export type Level = "off" | "low" | "medium" | "high" | "max";
+/**
+ * Observation 的触发主体分类：
+ * user=用户本人；assistant=ToBe；service=其他参与者构成的实际场景；
+ * signal=无主体信号；adapter=适配器自身；system=环境系统信息。
+ */
+export type Actor = "user" | "assistant" | "service" | "signal" | "adapter" | "system";
+/**
+ * Engine 的环境无关数据单元。
+ * content 完全由 Adapter 定义；核心层不得加入房间、消息、设备等环境字段。
+ */
+export interface Observation<TContent = unknown> {
+  id: string;
+  adapter_id: string;
+  adapter_name: string;
+  source: string;
+  actor: Actor;
+  content: TContent;
+  trust: Level;
+  attention: Level;
+  timestamp: number;
 }
 
-/** 感知层数据 - Engine 接收 */
-export interface Observation {
-    adapter_id: string;
-    adapter_name: string;
-    source: string;
-    actor: string;
-    content: string;
-    /** off:'可疑来源';low:'用户低参与度，谨慎辨别';medium:'用户正常交互来源';high:'可信度高信源';max:'完全可信' */
-    trust: Level;
-    /** off:'只做白名单编码触发';low:'低权重消息，必须堆积发送，去重';medium:'普通权重消息，短暂堆积发送|直接发送';high:'直接发送 Agent';'max':'打断 Agent 当前任务发送' */
-    attention: Level;
-    timestamp: number;
+/** function calling 的写操作信封；call_id 由宿主 Tool Call 注入。 */
+export interface Interaction {
+  call_id: string;
+  adapter_id: string;
+  action: string;
+  args: Readonly<Record<string, unknown>>;
 }
 
-/** Engine */
-export interface AwarenessEngine {
-    awarenessAdapters: Map<string, EnvAdapter> | null;
-    observe(adapter_id: string): Observation;
-    interact(adapter_id: string, args: Record<string, any>): Observation;
-    getAliveAdapters(): {adatper_id: string, adapter_name: string}[];
-    checkAdapter(adapter_id: string): boolean;
-    registerAllAdapters(adapters: EnvAdapter[]): void;
+/** function calling 的读操作信封。 */
+export interface ObserveRequest {
+  call_id: string;
+  adapter_id?: string;
+  action: string;
+  args: Readonly<Record<string, unknown>>;
 }
 
-/** 交互数据 */
-export interface Interact {
-    adapter_id: string;
-    adapter_name: string;
-    content: string;
-    timestamp: number;
+/** 成功和失败使用相同信封，具体状态与数据均编码在 content 中。 */
+export interface AdapterCallResult {
+  call_id: string;
+  adapter_id: string;
+  action: string;
+  timestamp: number;
+  content: string;
 }
 
-export type Level = 'off' | 'low' | 'medium' | 'high' | 'max';
+export interface EngineConfig {
+  lowBufferMs: number;
+  mediumBufferMs: number;
+  dedupeWindowMs: number;
+  maxBufferedPerAdapter: number;
+  maxReadyObservations: number;
+}

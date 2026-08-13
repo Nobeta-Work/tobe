@@ -1,0 +1,67 @@
+{
+  "enabled": false,
+  "autoStart": false,
+  "websocketUrl": "wss://m1.iirose.com:8778",
+  "nickname": "",
+  "credentials": {
+    "username": "",
+    "uid": "",
+    "password": "",
+    "roomId": "",
+    "roomPassword": ""
+  },
+  "profile": {
+    "status": "n",
+    "signature": "ToBe awareness adapter",
+    "messageColor": "2f7cff"
+  },
+  "adminsIds": [],
+  "connection": {
+    "loginTimeoutMs": 60000,
+    "heartbeatIntervalMs": 30000,
+    "reconnect": true,
+    "reconnectInitialDelayMs": 5000,
+    "reconnectMaxDelayMs": 300000,
+    "maxReconnectAttempts": 0
+  },
+  "assessment": {
+    "windowMs": 60000,
+    "floodWindowMs": 5000,
+    "floodThreshold": 12,
+    "maxEventsPerWindow": 200
+  },
+  "commands": {
+    "prefix": "/",
+    "adminOnly": true,
+    "whitelist": ["help", "ping", "status"]
+  },
+  "plugins": {
+    "welcome": {
+      "enabled": true,
+      "template": " [*{name}*] 欢迎来到房间～",
+      "perUserCooldownMs": 60000,
+      "globalWindowMs": 10000,
+      "globalMaxMessages": 3,
+      "commands": {}
+    },
+    "music": {
+      "enabled": true,
+      "commands": {
+        "prefix": "{name}",
+        "adminOnly": false,
+        "whiteList": ["点歌"]
+      },
+      "searchEndpoint": "https://music.163.com/api/search/get",
+      "streamEndpoint": "https://1309510434-1fsutl4dzp.ap-hongkong.tencentscf.com/musicstreamlink/",
+      "source": "netease",
+      "quality": 320,
+      "bitRate": 320,
+      "color": "000000"
+    }
+  },
+  "logging": {
+    "enabled": false,
+    "directory": "logs",
+    "includeRawFrames": false
+  }
+}
