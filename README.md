@@ -46,7 +46,7 @@ flowchart LR
 
 ## Quick Start
 
-请确保安装 [Pi]([earendil-works/pi: AI agent toolkit: unified LLM API, agent loop, TUI, coding agent CLI](https://github.com/earendil-works/pi)) 。
+请确保安装 [Pi](https://github.com/earendil-works/pi) 。
 
 ```bash
 curl -fsSL https://pi.dev/install.sh | sh
