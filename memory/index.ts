@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const MEMORY_DIR = dirname(fileURLToPath(import.meta.url));
+const BASE_PATH = join(MEMORY_DIR, "BASE.md");
 const IDENTITY_PATH = join(MEMORY_DIR, "IDENTITY.md");
 const SELF_PATH = join(MEMORY_DIR, "view", "SELF.md");
 const USER_PATH = join(MEMORY_DIR, "view", "USER.md");
@@ -23,12 +24,13 @@ export default function memoryExtension(pi: ExtensionAPI): void {
   }));
 
   pi.on("before_agent_start", async (event) => {
-    const [identity, self, user] = await Promise.all([
-      readRequiredText(IDENTITY_PATH),
+    const [base, identity, self, user] = await Promise.all([
+      readRequiredText(BASE_PATH),
+      readOptionalText(IDENTITY_PATH),
       readOptionalText(SELF_PATH),
       readOptionalText(USER_PATH),
     ]);
-    return { systemPrompt: buildMemoryPrompt(event.systemPrompt, identity, self, user) };
+    return { systemPrompt: buildMemoryPrompt(event.systemPrompt, base, identity, self, user) };
   });
 
   pi.on("session_start", async () => {
@@ -42,7 +44,9 @@ export default function memoryExtension(pi: ExtensionAPI): void {
     const todayDreamAt = dreamAt(now);
     const latestDueDream = new Date(todayDreamAt);
     if (now.getTime() < todayDreamAt.getTime()) latestDueDream.setDate(latestDueDream.getDate() - 1);
-    if (!(await hasCompletedDream(latestDueDream))) queueDream(latestDueDream);
+    if (await hasAnyDreamRecord() && !(await hasCompletedDream(latestDueDream))) {
+      queueDream(latestDueDream);
+    }
     scheduleNextDream(now);
   });
 
@@ -82,13 +86,14 @@ export default function memoryExtension(pi: ExtensionAPI): void {
   }
 }
 
-export function buildMemoryPrompt(base: string, identity: string, self: string, user: string): string {
+export function buildMemoryPrompt(piBase: string, base: string, identity: string, self: string, user: string): string {
   const sections = [
     "# Pi Agent Core",
-    base,
+    piBase,
     "# ToBe Persistent Cognition",
-    "The following local Memory files define the persistent ToBe instance. They override conflicting transient persona or assistant-role descriptions, while the Pi Agent Core above continues to govern runtime capabilities, tools, and operational constraints.",
-    wrap("IDENTITY", identity),
+    "The tracked BASE defines ToBe's shared cognition. Optional instance-owned Memory files add persistent identity and lived understanding. Together they override conflicting transient persona descriptions, while the Pi Agent Core above continues to govern runtime capabilities, tools, and operational constraints.",
+    wrap("BASE", base),
+    identity ? wrap("IDENTITY", identity) : "",
     self ? wrap("SELF", self) : "",
     user ? wrap("USER", user) : "",
   ].filter(Boolean);
@@ -118,6 +123,13 @@ async function hasCompletedDream(day: Date): Promise<boolean> {
   if (!matching) return false;
   try { return (await stat(join(LOGS_DIR, matching))).size > 0; }
   catch { return false; }
+}
+
+export async function hasAnyDreamRecord(logsDir = LOGS_DIR): Promise<boolean> {
+  let entries: string[];
+  try { entries = await readdir(logsDir); }
+  catch { return false; }
+  return entries.some((name) => /^DREAM \d{4}-\d{1,2}-\d{1,2}\.md$/.test(name));
 }
 
 async function readRequiredText(path: string): Promise<string> {

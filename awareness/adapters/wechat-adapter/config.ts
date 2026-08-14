@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveAdapterDataPath } from "../../adapter-data.ts";
+import { ensureAdapterConfig } from "../../config-file.ts";
 
 export type WeChatLogLevel = "debug" | "info" | "warn" | "error" | "silent";
 
@@ -17,6 +19,7 @@ export interface WeChatConfig {
 
 const ADAPTER_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = resolve(ADAPTER_DIR, "config.json");
+const TEMPLATE_CONFIG_PATH = resolve(ADAPTER_DIR, "config.default.json");
 const DEFAULTS: WeChatConfig = {
   enabled: true,
   autoStart: true,
@@ -28,14 +31,14 @@ const DEFAULTS: WeChatConfig = {
   events: { dedupeTtlMs: 3_600_000, messageCacheTtlMs: 3_600_000, maxCachedMessages: 500 },
 };
 
-export function loadConfig(path = DEFAULT_CONFIG_PATH): WeChatConfig {
-  const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<WeChatConfig>;
-  const baseDir = dirname(path);
+export function loadConfig(path?: string): WeChatConfig {
+  const configPath = path ?? ensureAdapterConfig(DEFAULT_CONFIG_PATH, TEMPLATE_CONFIG_PATH);
+  const raw = JSON.parse(readFileSync(configPath, "utf8")) as Partial<WeChatConfig>;
   const configuredStorage = raw.storageDir ?? DEFAULTS.storageDir;
   const config: WeChatConfig = {
     ...DEFAULTS,
     ...raw,
-    storageDir: isAbsolute(configuredStorage) ? configuredStorage : resolve(baseDir, configuredStorage),
+    storageDir: resolveAdapterDataPath(ADAPTER_DIR, configuredStorage, "data"),
     identity: { ...DEFAULTS.identity, ...raw.identity },
     receive: { ...DEFAULTS.receive, ...raw.receive },
     events: { ...DEFAULTS.events, ...raw.events },

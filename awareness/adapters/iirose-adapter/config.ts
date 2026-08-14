@@ -1,5 +1,8 @@
 import { readFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveAdapterDataPath } from "../../adapter-data.ts";
+import { ensureAdapterConfig } from "../../config-file.ts";
 
 export interface IIroseConfig {
   enabled: boolean;
@@ -65,10 +68,14 @@ export interface PluginCommandsConfig {
 }
 
 const DEFAULT_CONFIG_PATH = fileURLToPath(new URL("./config.json", import.meta.url));
+const TEMPLATE_CONFIG_PATH = fileURLToPath(new URL("./config.default.json", import.meta.url));
+const ADAPTER_DIR = dirname(DEFAULT_CONFIG_PATH);
 
-export function loadConfig(path = DEFAULT_CONFIG_PATH): IIroseConfig {
-  const value = JSON.parse(readFileSync(path, "utf8")) as unknown;
+export function loadConfig(path?: string): IIroseConfig {
+  const configPath = path ?? ensureAdapterConfig(DEFAULT_CONFIG_PATH, TEMPLATE_CONFIG_PATH);
+  const value = JSON.parse(readFileSync(configPath, "utf8")) as unknown;
   assertConfig(value);
+  value.logging.directory = resolveAdapterDataPath(ADAPTER_DIR, value.logging.directory, "data/logs");
   return value;
 }
 

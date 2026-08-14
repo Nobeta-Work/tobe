@@ -6,10 +6,8 @@ import { classifyFeishuActor } from "./actor.ts";
 import { FeishuParticipationClassifier } from "./classifier.ts";
 import { assertFeishuConfigured, feishuConfigurationError, loadConfig, type FeishuConfig, type FeishuReceiveIdType } from "./config.ts";
 import { eventTimestamp, observationId, parseMessageContent, type FeishuMessageEvent } from "./protocol.ts";
-import { LarkSdkGateway, type FeishuGateway } from "./scripts/client.ts";
-import type { FeishuConnectionEvent } from "./scripts/client.ts";
+import { LarkSdkGateway, type FeishuConnectionEvent, type FeishuGateway } from "./scripts/client.ts";
 import { runCommand } from "./scripts/help.ts";
-import { listen } from "./scripts/listen.ts";
 import { sendMessage } from "./scripts/send-message.ts";
 import { FEISHU_ACTIONS } from "./tools/index.ts";
 
@@ -123,6 +121,7 @@ export class FeishuAdapter implements EnvAdapter {
   /** 公开的协议入口便于 transport 与离线测试复用；不会绕过正常路由。 */
   async handleMessageEvent(event: FeishuMessageEvent): Promise<void> {
     const now = Date.now();
+    this.#health = { ...this.#health, lastEventAt: now };
     if (this.#isDuplicate(observationId(event), now)) return;
     const message = event.message;
     const direct = message.chat_type === "p2p";
@@ -139,8 +138,6 @@ export class FeishuAdapter implements EnvAdapter {
     const mentioned = botMentions.length > 0;
     const parsed = parseMessageContent(message.message_type, message.content);
     const source = direct ? `p2p:${openId ?? message.chat_id}` : `chat:${message.chat_id}`;
-    this.#health = { ...this.#health, lastEventAt: now };
-
     if (this.#config.commands.enabled && parsed.text) {
       const commandText = mentioned ? removeMentionKeys(parsed.text, botMentions) : parsed.text;
       const command = runCommand(commandText, this.#config.nickname, mentioned ? "" : this.#config.commands.prefix, this.#config.commands.whiteList, () => `feishu-adapter: ${this.#health.status}`);

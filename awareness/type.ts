@@ -29,6 +29,13 @@ export interface Interaction {
   args: Readonly<Record<string, unknown>>;
 }
 
+/** Awareness Engine lifecycle request; separate from Adapter interaction. */
+export interface EngineRequest {
+  call_id: string;
+  action: "register_adapter" | "unregister_adapter";
+  args: Readonly<Record<string, unknown>>;
+}
+
 /** function calling 的读操作信封。 */
 export interface ObserveRequest {
   call_id: string;

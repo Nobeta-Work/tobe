@@ -6,8 +6,9 @@ Awareness 是 ToBe 的 Pi extension，也是 Agent Core 面向环境的唯一感
 
 ```text
 Pi Agent
-  ├── awareness_observe  ─┐
-  └── awareness_interact ─┤
+  ├── awareness_observe  ──┐
+  ├── awareness_interact ──┤
+  └── awareness_engine ────┤
                           ▼
                     Awareness Engine
                           ▼ adapter_id
@@ -16,9 +17,9 @@ Pi Agent
                       Environment
 ```
 
-- `index.ts` 是 extension 入口，扫描 `adapters/*/ADAPTER.ts`，注册 Adapter，再按 `autoStart` 决定是否开启监听。
-- Pi 始终只暴露 `awareness_observe` 和 `awareness_interact` 两个 function-calling 工具。
-- Adapter 的动作是这两个工具下的 `action + args`，不会增加全局工具数量。
+- `index.ts` 是 extension 入口，扫描 `adapters/*/ADAPTER.ts`，注册 Adapter，再按 `autoStart` 决定是否开启监听。运行期间也可以通过 Engine 动作注册新建的 Adapter 或注销现有 Adapter。
+- Pi 暴露三个稳定工具：`awareness_observe` 负责 Adapter/Engine 只读观察，`awareness_interact` 只负责 Adapter 写操作，`awareness_engine` 只负责 Adapter 生命周期管理。
+- Adapter 的环境动作仍然收敛在 observe/interact 的 `action + args` 下，不会为每个 Adapter 增加全局工具。
 - Engine 只认识通用 `Observation` 信封。房间、消息、设备等字段全部属于具体 Adapter 的 `content`。
 - `adapter_id` 在扫描注册时生成，在当前 extension runtime 内唯一且稳定；不以是否已登录为条件。
 - Engine 的 `subscribe()` 会由 extension 桥接到 `pi.sendMessage`，不是等待 Agent 调用 `drain` 的轮询接口。
@@ -52,9 +53,11 @@ awareness/
 ├── adapter.ts     # 全局 Adapter/Engine 类型
 ├── type.ts        # 环境无关数据与 function-call 信封
 ├── engine.ts      # 感知聚合、缓冲与路由引擎
-├── tools/         # awareness_observe / awareness_interact
+├── tools/         # awareness_observe / awareness_interact / awareness_engine
 └── adapters/      # 环境个性化实现
 ```
+
+每个 Adapter 跟踪 `config.default.json`。第一次实例化而 `config.json` 不存在时，会原子复制默认文件生成实例配置，再正常实例化和注册。`config.json` 与 Adapter 自身的 `data/` 均不受 Git 跟踪；所有运行数据路径必须位于对应 Adapter 的 `data/` 内。
 
 ## 调用结果
 
@@ -74,3 +77,16 @@ awareness/
 - `drain`：取出已完成 attention 处理的观察。
 
 传入 `adapter_id` 时调用该 Adapter 的只读动作。
+
+## Interact
+
+`awareness_interact` 必须传入顶层 `adapter_id`，只调用该 Adapter 的写动作，不承载 Engine 语义。
+
+## Engine
+
+`awareness_engine` 独立承载生命周期动作：
+
+- `register_adapter`，参数 `{ "adapter_name": "目录名" }`：只从 `awareness/adapters/<adapter_name>/ADAPTER.ts` 加载并注册；若其 `autoStart=true`，注册后启动。
+- `unregister_adapter`，参数 `{ "adapter_id": "运行时 ID" }`：停止、冲刷缓冲并注销 Adapter。
+
+动态加载不接受任意路径。注销后再次注册会重新导入入口并重新读取配置，同时生成新的运行时 `adapter_id`。

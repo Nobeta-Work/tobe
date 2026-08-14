@@ -6,7 +6,7 @@ export function registerInteractTool(pi: ExtensionAPI, engine: AwarenessEngine):
   pi.registerTool({
     name: "awareness_interact",
     label: "Awareness Interact",
-    description: "Call a state-changing action on a registered environment adapter by runtime adapter_id.",
+    description: "Call a state-changing action on a registered environment Adapter by runtime adapter_id.",
     promptSnippet: "Interact with a registered external environment adapter",
     promptGuidelines: [
       "Use awareness_interact only with an adapter_id and action returned by awareness_observe list_adapters.",

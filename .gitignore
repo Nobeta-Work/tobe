@@ -4,3 +4,15 @@ node_modules/
 tmp/
 logs/
 tests/
+
+# Instance-owned Adapter configuration and runtime data
+awareness/adapters/*/config.json
+awareness/adapters/*/data/
+
+# Evolving Memory state
+memory/IDENTITY.md
+memory/view/SELF.md
+memory/view/USER.md
+memory/logs/
+memory/skills/active/
+memory/skills/candidates/

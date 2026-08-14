@@ -1,5 +1,6 @@
 import type {
   AdapterCallResult,
+  EngineRequest,
   Interaction,
   Level,
   Observation,
@@ -40,6 +41,7 @@ export interface EnvAdapter {
 }
 
 export type AdapterFactory = () => EnvAdapter | Promise<EnvAdapter>;
+export type AdapterLoader = (adapterName: string) => Promise<EnvAdapter>;
 
 export interface RegisteredAdapter {
   adapter_id: string;
@@ -55,6 +57,7 @@ export interface AwarenessEngine {
   startAutoAdapters(): Promise<void>;
   stopAll(): Promise<void>;
   interact(interaction: Interaction): Promise<AdapterCallResult>;
+  manage(request: EngineRequest): Promise<AdapterCallResult>;
   observe(request: ObserveRequest): Promise<AdapterCallResult>;
   subscribe(listener: ObservationListener): Unsubscribe;
   getAdapters(): RegisteredAdapter[];

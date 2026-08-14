@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { ensureAdapterConfig } from "../../config-file.ts";
 
 export type FeishuReceiveIdType = "open_id" | "user_id" | "union_id" | "email" | "chat_id";
 
@@ -58,6 +59,7 @@ export interface FeishuConfig {
 }
 
 const DEFAULT_CONFIG_PATH = fileURLToPath(new URL("./config.json", import.meta.url));
+const TEMPLATE_CONFIG_PATH = fileURLToPath(new URL("./config.default.json", import.meta.url));
 
 const DEFAULTS: FeishuConfig = {
   enabled: true,
@@ -90,8 +92,9 @@ const DEFAULTS: FeishuConfig = {
   logging: { enabled: false, includeRawEvents: false },
 };
 
-export function loadConfig(path = DEFAULT_CONFIG_PATH): FeishuConfig {
-  const raw = JSON.parse(readFileSync(path, "utf8")) as unknown;
+export function loadConfig(path?: string): FeishuConfig {
+  const configPath = path ?? ensureAdapterConfig(DEFAULT_CONFIG_PATH, TEMPLATE_CONFIG_PATH);
+  const raw = JSON.parse(readFileSync(configPath, "utf8")) as unknown;
   if (!raw || typeof raw !== "object") throw new Error("Feishu config must be an object");
   const value = raw as Partial<FeishuConfig>;
   const config: FeishuConfig = {

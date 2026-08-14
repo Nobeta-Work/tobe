@@ -27,12 +27,17 @@ interface WsClientLike {
 }
 
 type WsClientFactory = (params: ConstructorParameters<typeof Lark.WSClient>[0]) => WsClientLike;
-export interface LarkSdkGatewayOptions { createWsClient?: WsClientFactory }
+export interface LarkSdkGatewayOptions {
+  createWsClient?: WsClientFactory;
+  /** 覆盖首次连接的总等待时间，仅用于测试或特殊网络环境。 */
+  connectTimeoutMs?: number;
+}
 
 export class LarkSdkGateway implements FeishuGateway {
   readonly #config: FeishuConfig;
   readonly #client: Lark.Client;
   readonly #createWsClient: WsClientFactory;
+  readonly #connectTimeoutMs: number;
   #ws: WsClientLike | null = null;
   #connectTask: Promise<void> | null = null;
   #rejectPendingConnect: ((error: Error) => void) | null = null;
@@ -40,6 +45,8 @@ export class LarkSdkGateway implements FeishuGateway {
   constructor(config: FeishuConfig, options: LarkSdkGatewayOptions = {}) {
     this.#config = config;
     this.#createWsClient = options.createWsClient ?? ((params) => new Lark.WSClient(params));
+    this.#connectTimeoutMs = options.connectTimeoutMs
+      ?? Math.max(config.connection.handshakeTimeoutMs * 2, 15_000);
     const base = { appId: config.credentials.appId, appSecret: resolveAppSecret(config) };
     this.#client = new Lark.Client({
       ...base,
@@ -61,9 +68,11 @@ export class LarkSdkGateway implements FeishuGateway {
     });
     this.#connectTask = new Promise<void>((resolve, reject) => {
       let initialSettled = false;
+      let timeout: ReturnType<typeof setTimeout>;
       const settleReady = () => {
         if (initialSettled) return;
         initialSettled = true;
+        clearTimeout(timeout);
         this.#rejectPendingConnect = null;
         resolve();
       };
@@ -71,9 +80,14 @@ export class LarkSdkGateway implements FeishuGateway {
         void onConnectionEvent?.({ state: "failed", error });
         if (initialSettled) return;
         initialSettled = true;
+        clearTimeout(timeout);
         this.#rejectPendingConnect = null;
         reject(error);
       };
+      timeout = setTimeout(() => {
+        this.#ws?.close({ force: true });
+        settleError(new Error(`Feishu connection was not ready within ${this.#connectTimeoutMs}ms`));
+      }, this.#connectTimeoutMs);
       this.#rejectPendingConnect = settleError;
       this.#ws = this.#createWsClient({
         ...base,

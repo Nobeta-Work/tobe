@@ -1,6 +1,6 @@
 ---
 name: awareness
-description: Use ToBe's Pi Awareness extension through its two stable tools, awareness_observe and awareness_interact. Use to discover runtime adapters, drain normalized observations, call adapter read actions, or perform explicit environment interactions by adapter_id. Adapter-specific payloads remain in each adapter skill.
+description: Use ToBe's Pi Awareness extension through awareness_observe, awareness_interact, and awareness_engine. Discover runtime adapters, observe or interact with environments, and manage Adapter registration without mixing Engine lifecycle semantics into Adapter actions.
 ---
 
 # Awareness
@@ -9,7 +9,7 @@ description: Use ToBe's Pi Awareness extension through its two stable tools, awa
 
 1. 对陌生环境先调用 `awareness_observe`，`action="list_adapters"`，不传 `adapter_id`。
 2. 从结果取得运行时 `adapter_id`、健康状态及 action 清单。
-3. 只读 action 继续使用 `awareness_observe`；写操作使用 `awareness_interact`。
+3. Adapter 只读 action 使用 `awareness_observe`；Adapter 写操作使用 `awareness_interact`；注册和注销使用 `awareness_engine`。
 4. 解析结果 `content`，检查其中的 `status`。
 
 ## awareness_observe
@@ -39,6 +39,17 @@ Observation 正常通过 subscription 主动推送给 Agent：high/max 立即 st
 ```json
 { "adapter_id": "运行时唯一 ID", "action": "Adapter interact action", "args": {} }
 ```
+
+## awareness_engine
+
+Engine 生命周期使用独立工具：
+
+```text
+awareness_engine({ "action": "register_adapter", "args": { "adapter_name": "new-adapter" } })
+awareness_engine({ "action": "unregister_adapter", "args": { "adapter_id": "运行时唯一 ID" } })
+```
+
+`register_adapter` 只扫描 `awareness/adapters/<adapter_name>/ADAPTER.ts`。不要传入路径；创建新 Adapter 时先完成入口、配置默认文件、Skill 和必要测试，再注册。注销会停止 Adapter，重新注册会产生新的运行时 ID。
 
 ## Result
 

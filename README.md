@@ -46,22 +46,25 @@ flowchart LR
 
 ## Quick Start
 
-请确保安装 [Pi](https://github.com/earendil-works/pi) 。
-
 ```bash
-curl -fsSL https://pi.dev/install.sh | sh
-```
-
-将项目模块以 Extensions 形式加载入 Pi ，按需修改 Adapter 配置。
-
-```bash
-
-pi install git:github.com/Nobeta-Work/tobe
-
+git clone https://github.com/Nobeta-Work/tobe.git
+cd tobe
+npm install
+npm start
 ```
 
 *注意：所有 adapters 默认禁用，需填写配置信息后调度启动。*
-*当前不保证 `pi update` 能无冲突保留 SELF、USER、Dream 和自动生成的 Skills*
+
+仓库本身就是 Pi 的工作目录；`.pi/settings.json` 会把当前仓库作为本地 Pi Package 加载，`npm start` 使用仓库锁定的 Pi 版本。首次扫描 Adapter 时会由 `config.default.json` 自动生成不受 Git 跟踪的 `config.json`。
+
+更新使用：
+
+```bash
+npm run update
+npm start
+```
+
+Adapter 配置、各 Adapter 的 `data/`、Memory 的实例认知、Dream 和自动生成的 Skills 均不受 Git 跟踪，`git pull` 不会覆盖这些内容。它们仍位于仓库工作目录内，删除仓库或执行 `git clean -fdx` 前请先备份。
 
 ## Memory
 

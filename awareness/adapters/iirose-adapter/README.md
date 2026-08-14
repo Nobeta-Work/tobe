@@ -7,7 +7,8 @@ IIROSE 聊天室的 Awareness Adapter。当前增量覆盖登录、登出、WebS
 ```text
 iirose-adapter/
 ├── ADAPTER.ts          # 生命周期、路由顺序和 Engine 边界
-├── config.json         # 唯一运行配置（默认禁用且无凭证）
+├── config.default.json # 受 Git 跟踪的默认配置
+├── config.json         # 首次实例化时生成的实例配置
 ├── classifier.ts       # trust / attention 滑动窗口
 ├── protocol.ts         # IIROSE 帧编解码
 ├── scripts/            # 登录、登出、监听、发送、help 等接口请求
@@ -44,9 +45,9 @@ IIROSE 等级只有 `off / low / medium / high`：
 
 ## 配置
 
-编辑 `config.json` 后，至少填写 `credentials.username/password/roomId/uid`、`adminsIds`，再将 `enabled` 设为 `true`。`adminsIds` 是用户唯一键列表，不使用显示名鉴权。密码仅在内存中转换为 MD5 登录字段；不要提交真实配置。
+首次扫描会在缺少 `config.json` 时复制 `config.default.json`，随后正常注册。编辑生成的 `config.json`，至少填写 `credentials.username/password/roomId/uid`、`adminsIds`，再将 `enabled` 设为 `true`。`adminsIds` 是用户唯一键列表，不使用显示名鉴权。密码仅在内存中转换为 MD5 登录字段；实例配置不受 Git 跟踪。
 
-默认 `autoStart=false`，因此 extension 会扫描注册并分配 `adapter_id`，但不会自动连接网站。日志默认关闭；启用后目录由 `logging.directory` 指定，但当前核心实现不负责持久化日志。
+默认 `autoStart=false`，因此 extension 会扫描注册并分配 `adapter_id`，但不会自动连接网站。日志默认关闭；启用后目录由 `logging.directory` 指定且必须位于本 Adapter 的 `data/` 内，但当前核心实现不负责持久化日志。
 
 Agent 不直接注册 IIROSE 专属 function tools。它先通过全局 `awareness_observe/list_adapters` 取得 ID 和 action，再用全局 `awareness_observe` 或 `awareness_interact` 调用。
 

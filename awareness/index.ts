@@ -17,6 +17,31 @@ interface AdapterModule {
 }
 
 const DEFAULT_ADAPTERS_DIR = fileURLToPath(new URL("./adapters", import.meta.url));
+const ADAPTER_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+let importSequence = 0;
+
+/** 从固定的 adapters 根目录加载一个 Adapter；不接受任意文件路径。 */
+export async function loadAdapter(adapterName: string, adaptersDir = DEFAULT_ADAPTERS_DIR): Promise<EnvAdapter> {
+  if (!ADAPTER_NAME_PATTERN.test(adapterName)) {
+    throw new Error(`Invalid adapter name: ${adapterName}`);
+  }
+  const entryPath = join(adaptersDir, adapterName, "ADAPTER.ts");
+  try { await access(entryPath); }
+  catch { throw new Error(`Adapter entry does not exist: adapters/${adapterName}/ADAPTER.ts`); }
+  let module: AdapterModule;
+  try {
+    const entryUrl = pathToFileURL(entryPath);
+    entryUrl.searchParams.set("awareness_load", `${Date.now()}-${importSequence++}`);
+    module = await import(entryUrl.href) as AdapterModule;
+  } catch (error) {
+    throw new Error(`Failed to load adapter entry ${entryPath}`, { cause: error });
+  }
+  const factory = module.createAdapter ?? module.default;
+  if (typeof factory !== "function") {
+    throw new Error(`${entryPath} must export createAdapter() or a default factory`);
+  }
+  return await factory();
+}
 
 /** 仅加载 adapters/<name>/ADAPTER.ts；其他文件不会被当作入口执行。 */
 export async function discoverAdapters(adaptersDir = DEFAULT_ADAPTERS_DIR): Promise<EnvAdapter[]> {
@@ -26,14 +51,7 @@ export async function discoverAdapters(adaptersDir = DEFAULT_ADAPTERS_DIR): Prom
     if (!entry.isDirectory()) continue;
     const entryPath = join(adaptersDir, entry.name, "ADAPTER.ts");
     try { await access(entryPath); } catch { continue; }
-    let module: AdapterModule;
-    try { module = await import(pathToFileURL(entryPath).href) as AdapterModule; }
-    catch (error) { throw new Error(`Failed to load adapter entry ${entryPath}`, { cause: error }); }
-    const factory = module.createAdapter ?? module.default;
-    if (typeof factory !== "function") {
-      throw new Error(`${entryPath} must export createAdapter() or a default factory`);
-    }
-    adapters.push(await factory());
+    adapters.push(await loadAdapter(entry.name, adaptersDir));
   }
   return adapters;
 }
@@ -66,7 +84,7 @@ export function pushObservation(pi: ExtensionAPI, observation: Observation): voi
 
 /** Pi extension 入口。Pi 负责调用；import 本文件本身不会启动网络连接。 */
 export default async function awarenessExtension(pi: ExtensionAPI): Promise<void> {
-  const engine = new AwarenessEngineImpl();
+  const engine = new AwarenessEngineImpl({}, (adapterName) => loadAdapter(adapterName));
   const adapters = await discoverAdapters();
   for (const adapter of adapters) engine.register(adapter);
 
@@ -76,14 +94,14 @@ export default async function awarenessExtension(pi: ExtensionAPI): Promise<void
   pi.on("resources_discover", () => ({
     skillPaths: [
       fileURLToPath(new URL("./SKILL.md", import.meta.url)),
-      ...adapters.flatMap((adapter) => adapter.getSkillPaths()),
+      ...engine.getAdapters().flatMap(({ adapter_id }) => engine.getAdapter(adapter_id)?.getSkillPaths() ?? []),
     ],
   }));
 
   pi.on("session_start", async (_event, ctx) => {
     try {
       await engine.startAutoAdapters();
-      ctx.ui.notify(`Awareness loaded ${adapters.length} adapter(s)`, "info");
+      ctx.ui.notify(`Awareness loaded ${engine.getAdapters().length} adapter(s)`, "info");
     } catch (error) {
       ctx.ui.notify(`Awareness adapter start failed: ${error instanceof Error ? error.message : String(error)}`, "error");
     }

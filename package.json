@@ -26,7 +26,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test awareness/tests/*.test.ts awareness/adapters/*/*.test.ts",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "start": "pi",
+    "update": "git pull --ff-only && npm install"
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.73.0",

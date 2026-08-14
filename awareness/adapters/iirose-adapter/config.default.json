@@ -61,7 +61,7 @@
   },
   "logging": {
     "enabled": false,
-    "directory": "logs",
+    "directory": "data/logs",
     "includeRawFrames": false
   }
 }

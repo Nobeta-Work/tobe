@@ -10,7 +10,7 @@
 npm install
 ```
 
-凭证默认保存到 `data/`，该目录已忽略版本控制。SDK 要求 Node.js 22 或更高版本。
+首次扫描会在缺少 `config.json` 时复制受 Git 跟踪的 `config.default.json`，随后正常注册。生成的实例配置与凭证目录不受 Git 跟踪。凭证只能保存到本 Adapter 的 `data/` 内；SDK 要求 Node.js 22 或更高版本。
 
 ## 启动语义
 

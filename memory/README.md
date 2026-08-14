@@ -7,7 +7,8 @@ Memory 是 ToBe 的主体核心和长期连续性模块，当前以 Pi extension
 ```text
 memory/
 ├── index.ts                     # Pi extension 入口、认知注入、Skill 发现与 Dream 调度
-├── IDENTITY.md                  # ToBe 实例的主体认知
+├── BASE.md                      # 项目维护的 ToBe 共享基础认知
+├── IDENTITY.md                  # 可选的实例身份认识（不受 Git 跟踪）
 ├── SKILL.md                     # 面向 Agent 的 Memory 使用契约
 ├── README.md                    # 模块说明
 ├── view/
@@ -22,11 +23,12 @@ memory/
 
 ## 认知加载
 
-每次 Agent turn 开始前，extension 重新读取 `IDENTITY.md`、`view/SELF.md` 和 `view/USER.md`，并加入 Pi 已有 system prompt：
+每次 Agent turn 开始前，extension 重新读取 `BASE.md`、`IDENTITY.md`、`view/SELF.md` 和 `view/USER.md`，并加入 Pi 已有 system prompt：
 
-- Identity 覆盖 Agent 的主体认知；
+- BASE 是必需的项目基础认知；IDENTITY、SELF 和 USER 是可选的实例文件；
+- 实例认知覆盖冲突的临时角色描述；
 - Pi Agent Core 原有工具能力、运行信息和协议仍然保留；
-- 空的 SELF 或 USER 不会注入占位内容；
+- 不存在或为空的可选实例文件不会注入占位内容；
 - 文件更新会在下一次 turn 自动生效，不要求重启。
 
 ## Skills
@@ -53,7 +55,8 @@ Dream 由 extension 按宿主机本地时间每天 `02:00` 尝试触发。它通
 
 - Agent 空闲时立即开始；
 - Agent 正忙时以 follow-up 排队，不中断当前工作；
-- 启动时检查最近一个已经到期的 02:00；对应日期不存在非空 Dream 文件时，会尝试补执行；
+- 全新实例没有任何 `DREAM *.md` 时只安排下一次 02:00，不补执行无经历可回顾的 Dream；
+- 已存在 Dream 历史时，启动会检查最近一个已经到期的 02:00；对应日期不存在非空 Dream 文件时尝试补执行；
 - 例如在凌晨 02:00 前启动，会先检查前一天的 Dream，同时继续等待当天 02:00；
 - 完成后安排下一次本地时间 02:00。
 

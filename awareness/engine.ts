@@ -1,5 +1,6 @@
 import type {
   AdapterActionDefinition,
+  AdapterLoader,
   AwarenessEngine,
   EnvAdapter,
   ObservationListener,
@@ -9,6 +10,7 @@ import type {
 import type {
   AdapterCallResult,
   EngineConfig,
+  EngineRequest,
   Interaction,
   Observation,
   ObserveRequest,
@@ -27,6 +29,7 @@ interface BufferedObservation { observation: Observation; count: number }
 
 export class AwarenessEngineImpl implements AwarenessEngine {
   readonly #config: EngineConfig;
+  readonly #loadAdapter: AdapterLoader | undefined;
   readonly #adapters = new Map<string, EnvAdapter>();
   readonly #subscriptions = new Map<string, Unsubscribe>();
   readonly #listeners = new Set<ObservationListener>();
@@ -34,8 +37,9 @@ export class AwarenessEngineImpl implements AwarenessEngine {
   readonly #timers = new Map<string, ReturnType<typeof setTimeout>>();
   readonly #ready: Observation[] = [];
 
-  constructor(config: Partial<EngineConfig> = {}) {
+  constructor(config: Partial<EngineConfig> = {}, loadAdapter?: AdapterLoader) {
     this.#config = { ...DEFAULT_CONFIG, ...config };
+    this.#loadAdapter = loadAdapter;
   }
 
   register(adapter: EnvAdapter): void {
@@ -92,7 +96,10 @@ export class AwarenessEngineImpl implements AwarenessEngine {
     }
     switch (request.action) {
       case "list_adapters":
-        return this.#result(request, ENGINE_ADAPTER_ID, { status: "success", adapters: this.getAdapters() });
+        return this.#result(request, ENGINE_ADAPTER_ID, {
+          status: "success",
+          adapters: this.getAdapters(),
+        });
       case "drain": {
         const limit = this.#positiveInteger(request.args.limit, this.#config.maxReadyObservations);
         const observations = this.#ready.splice(0, limit);
@@ -170,16 +177,61 @@ export class AwarenessEngineImpl implements AwarenessEngine {
     await Promise.allSettled([...this.#listeners].map((listener) => listener(observation)));
   }
 
-  #result(request: ObserveRequest | Interaction, adapter_id: string, content: unknown): AdapterCallResult {
+  async manage(request: EngineRequest): Promise<AdapterCallResult> {
+    try {
+      switch (request.action) {
+        case "register_adapter": {
+          if (!this.#loadAdapter) throw new Error("Dynamic adapter loading is not configured");
+          const adapterName = this.#requiredString(request.args.adapter_name, "adapter_name");
+          if ([...this.#adapters.values()].some((adapter) => adapter.name === adapterName)) {
+            throw new Error(`Adapter is already registered: ${adapterName}`);
+          }
+          const adapter = await this.#loadAdapter(adapterName);
+          this.register(adapter);
+          let startError: string | undefined;
+          if (adapter.autoStart) {
+            try { await adapter.start(); }
+            catch (error) { startError = error instanceof Error ? error.message : String(error); }
+          }
+          return this.#result(request, ENGINE_ADAPTER_ID, {
+            status: "success",
+            adapter: this.getAdapters().find((item) => item.adapter_id === adapter.id),
+            ...(startError ? { start_error: startError } : {}),
+          });
+        }
+        case "unregister_adapter": {
+          const adapterId = this.#requiredString(request.args.adapter_id, "adapter_id");
+          const adapter = this.#adapters.get(adapterId);
+          if (!adapter) throw new Error(`Unknown adapter_id: ${adapterId}`);
+          await this.unregister(adapterId);
+          return this.#result(request, ENGINE_ADAPTER_ID, {
+            status: "success",
+            adapter_id: adapterId,
+            adapter_name: adapter.name,
+          });
+        }
+      }
+    } catch (error) {
+      return this.#failure(request, error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  #result(request: ObserveRequest | Interaction | EngineRequest, adapter_id: string, content: unknown): AdapterCallResult {
     return { call_id: request.call_id, adapter_id, action: request.action, timestamp: Date.now(), content: JSON.stringify(content) };
   }
 
-  #failure(request: ObserveRequest | Interaction, message: string): AdapterCallResult {
-    return this.#result(request, request.adapter_id ?? ENGINE_ADAPTER_ID, { status: "error", message });
+  #failure(request: ObserveRequest | Interaction | EngineRequest, message: string): AdapterCallResult {
+    const adapterId = "adapter_id" in request ? request.adapter_id ?? ENGINE_ADAPTER_ID : ENGINE_ADAPTER_ID;
+    return this.#result(request, adapterId, { status: "error", message });
   }
 
   #positiveInteger(value: unknown, fallback: number): number {
     return typeof value === "number" && Number.isInteger(value) && value > 0 ? Math.min(value, fallback) : fallback;
+  }
+
+  #requiredString(value: unknown, name: string): string {
+    if (typeof value !== "string" || !value.trim()) throw new Error(`${name} must be a non-empty string`);
+    return value.trim();
   }
 }
 

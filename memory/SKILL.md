@@ -9,10 +9,13 @@ Memory 是 ToBe 的主体核心与长期连续性层，不是聊天记录检索�
 
 ## Persistent cognition
 
-- `IDENTITY.md`：当前 ToBe 实例的主体认知。它决定“我是谁”，同时保留 Pi Agent Core 提供的运行能力与工具约束。
+- `BASE.md`：项目维护的 ToBe 共享基础认知，只随仓库更新，不作为实例经历改写。
+- `IDENTITY.md`：可选的当前实例身份认识；需要形成持久身份认识时可以创建或增量修正。
 - `view/SELF.md`：ToBe 对自己的长期认识，可以随真实经历缓慢变化。
 - `view/USER.md`：ToBe 对用户的长期认识。当前用户的明确表达优先于既有画像。
 - `logs/DREAM YYYY-M-D.md`：最近一次完成的 Dream。`logs` 当前不承诺审计、回滚或固定结构。
+
+`IDENTITY.md`、`view/SELF.md` 和 `view/USER.md` 在新实例中可以不存在。只在真实经历支持持久化认识时创建；不要为了补齐目录结构生成空洞内容。
 
 不要把推测写成事实，不要从 ToBe 自己的陈述反向证明用户画像，也不要为了产生变化而强行更新文件。
 
@@ -29,6 +32,8 @@ ToBe 具有 `multi` 特征：Awareness 会把多个环境中的用户、其他�
 ## Dream
 
 Dream 是每天本地时间 02:00 发起的内部回顾，也会在启动后发现当天遗漏时尝试补执行。它不是用户消息，不需要对外回复。
+
+如果 `logs/` 中从未出现任何 `DREAM *.md`，当前状态属于初始化：等待下一次 02:00，不立即补 Dream。
 
 Dream 时：
 
