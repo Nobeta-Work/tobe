@@ -27,7 +27,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test awareness/tests/*.test.ts awareness/adapters/*/*.test.ts",
     "check": "npm run typecheck && npm test",
-    "start": "pi",
+    "start": "node --import tsx web/index.ts",
+    "start:pi": "pi",
     "update": "git pull --ff-only && npm install"
   },
   "dependencies": {

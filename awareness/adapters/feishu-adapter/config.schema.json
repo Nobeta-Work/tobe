@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "飞书 Adapter",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "enabled": { "type": "boolean", "title": "启用" },
+    "autoStart": { "type": "boolean", "title": "随 Agent 启动" },
+    "nickname": { "type": "string", "title": "昵称" },
+    "credentials": { "type": "object", "title": "凭据", "properties": {
+      "appId": { "type": "string", "title": "App ID" },
+      "appSecret": { "type": "string", "title": "App Secret", "x-sensitive": true },
+      "appSecretEnv": { "type": "string", "title": "Secret 环境变量" }
+    }},
+    "identity": { "type": "object", "title": "身份", "properties": {
+      "idType": { "type": "string", "title": "ID 类型", "enum": ["open_id", "user_id", "union_id"] },
+      "adminsIds": { "type": "array", "title": "管理员 ID", "items": { "type": "string" } }
+    }},
+    "receive": { "type": "object", "title": "接收规则", "properties": {
+      "directMessages": { "type": "boolean", "title": "私聊" }, "groupMessages": { "type": "boolean", "title": "群聊" },
+      "requireMentionInGroup": { "type": "boolean", "title": "群聊要求提及" }, "allowChats": { "type": "array", "title": "允许会话", "items": { "type": "string" } },
+      "denyChats": { "type": "array", "title": "拒绝会话", "items": { "type": "string" } }, "ignoreBotMessages": { "type": "boolean", "title": "忽略机器人消息" },
+      "messageTypes": { "type": "array", "title": "消息类型", "items": { "type": "string" } }
+    }},
+    "commands": { "type": "object", "title": "命令", "properties": {
+      "enabled": { "type": "boolean", "title": "启用命令" }, "prefix": { "type": "string", "title": "前缀" },
+      "adminOnly": { "type": "boolean", "title": "仅管理员" }, "whiteList": { "type": "array", "title": "命令白名单", "items": { "type": "string" } }
+    }}
+  }
+}

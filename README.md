@@ -55,7 +55,13 @@ npm start
 
 *注意：所有 adapters 默认禁用，需填写配置信息后调度启动。*
 
-仓库本身就是 Pi 的工作目录；`.pi/settings.json` 会把当前仓库作为本地 Pi Package 加载，`npm start` 使用仓库锁定的 Pi 版本。首次扫描 Adapter 时会由 `config.default.json` 自动生成不受 Git 跟踪的 `config.json`。
+`npm start` 启动 ToBe Web，默认监听 `0.0.0.0:2222`，并由 Web 在仓库工作目录内启动和恢复名称固定为 `tobe` 的 Pi Session。Web 会显式加载当前仓库声明的 Pi extensions，不依赖全局安装的副本。首次打开 Adapter 配置时会由 `config.default.json` 自动生成不受 Git 跟踪的 `config.json`。
+
+如需绕过 Web 直接启动 Pi，可使用：
+
+```bash
+npm run start:pi
+```
 
 更新使用：
 
@@ -68,7 +74,7 @@ Adapter 配置、各 Adapter 的 `data/`、Memory 的实例认知、Dream 和自
 
 ## Memory
 
-感知世界的流动，活在当下；让认知与画像不断更新，让已有的经验沉淀，让事件留下深浅的印象。
+让认知与画像不断更新，让已有的经验沉淀，让事件留下深浅的印象。
 
 > Memory 层主要关注长期记忆系统，拆分为记忆存储(数据类型与存储方式)、沉淀(为何、如何存储记忆数据)与调用 (何时、为何、如何唤回记忆)三大模块。
 

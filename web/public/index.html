@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>ToBe</title>
+  <link rel="stylesheet" href="/style.css?v=1">
+</head>
+<body>
+  <div id="login" class="login-shell" hidden>
+    <form id="login-form" class="login-panel">
+      <div class="brand-mark" aria-hidden="true">T</div>
+      <p class="kicker">ToBe Control</p>
+      <h1>访问长期会话</h1>
+      <p class="muted">输入部署时设置的访问密码。</p>
+      <label for="login-password">访问密码</label>
+      <input id="login-password" name="password" type="password" autocomplete="current-password" required autofocus>
+      <p id="login-error" class="inline-error" role="alert"></p>
+      <button class="primary" type="submit">进入</button>
+    </form>
+  </div>
+
+  <div id="app" class="app-shell" hidden>
+    <aside class="sidebar">
+      <div class="brand-row">
+        <div class="brand-mark" aria-hidden="true">T</div>
+        <div><strong>ToBe</strong><span>长期主体控制台</span></div>
+      </div>
+      <nav class="nav" aria-label="主导航">
+        <button class="nav-item active" data-view="chat">会话</button>
+        <button class="nav-item" data-view="adapters">Adapters</button>
+        <button class="nav-item" data-view="memory">Memory</button>
+        <button class="nav-item" data-view="system">访问说明</button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="status-line"><span id="status-dot" class="status-dot"></span><span id="status-label">正在连接</span></div>
+        <button id="logout" class="text-button" hidden>退出访问</button>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div><p id="view-kicker" class="kicker">SESSION TOBE</p><h1 id="view-title">长期会话</h1></div>
+        <div id="agent-controls" class="button-row">
+          <button id="agent-toggle" class="secondary">启动 Agent</button>
+          <button id="agent-abort" class="secondary" hidden>中止生成</button>
+        </div>
+      </header>
+
+      <section id="view-chat" class="view active">
+        <div id="messages" class="messages" aria-live="polite">
+          <div class="empty-state"><h2>会话正在恢复</h2><p>固定 Session 名称为 tobe。消息载入后会出现在这里。</p></div>
+        </div>
+        <form id="composer" class="composer">
+          <label class="sr-only" for="prompt">发送消息</label>
+          <textarea id="prompt" rows="2" placeholder="向 ToBe 发送消息。Enter 发送，Shift+Enter 换行。"></textarea>
+          <button class="primary" type="submit">发送</button>
+        </form>
+      </section>
+
+      <section id="view-adapters" class="view split-view">
+        <div class="index-pane"><div class="pane-heading"><h2>Adapters</h2><p>保存配置不会自动重载运行中的实例。</p></div><div id="adapter-list" class="item-list"></div></div>
+        <div id="adapter-editor" class="editor-pane"><div class="empty-state"><h2>选择 Adapter</h2><p>配置由 schema 声明，敏感字段不会回传到浏览器。</p></div></div>
+      </section>
+
+      <section id="view-memory" class="view split-view">
+        <div class="index-pane"><div class="pane-heading"><h2>Memory</h2><p>BASE 仅审查，实例记忆和 Skills 可以修改。</p></div><div id="memory-list" class="item-list"></div></div>
+        <div id="memory-editor" class="editor-pane"><div class="empty-state"><h2>选择记忆文件</h2><p>使用纯文本编辑，不渲染 Markdown。</p></div></div>
+      </section>
+
+      <section id="view-system" class="view prose-view">
+        <h2>访问模型</h2>
+        <p>Web 默认监听端口 2222。IP 白名单为空时允许任意来源访问，填写后仅允许精确 IP 或 CIDR 范围。</p>
+        <p>未配置密码时直接开放，不提供初始化页面。设置密码后使用 HttpOnly 会话 Cookie，明文密码会在首次启动时转换为哈希。</p>
+        <h2>运行时配置</h2>
+        <p>Adapter 配置保存后立即写入 config.json。已运行的 Adapter 不自动重载，可以在会话中要求 Agent 使用 awareness_engine 重新注册。</p>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script type="module" src="/app.js?v=1"></script>
+</body>
+</html>

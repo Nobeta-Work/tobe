@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "蔷薇花园 Adapter",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "enabled": { "type": "boolean", "title": "启用" }, "autoStart": { "type": "boolean", "title": "随 Agent 启动" },
+    "websocketUrl": { "type": "string", "title": "WebSocket 地址" }, "nickname": { "type": "string", "title": "昵称" },
+    "credentials": { "type": "object", "title": "凭据", "properties": {
+      "username": { "type": "string", "title": "用户名" }, "uid": { "type": "string", "title": "UID" },
+      "password": { "type": "string", "title": "密码", "x-sensitive": true }, "roomId": { "type": "string", "title": "房间 ID" },
+      "roomPassword": { "type": "string", "title": "房间密码", "x-sensitive": true }
+    }},
+    "profile": { "type": "object", "title": "资料", "properties": { "status": { "type": "string", "title": "状态" }, "signature": { "type": "string", "title": "签名" }, "messageColor": { "type": "string", "title": "消息颜色" } }},
+    "adminsIds": { "type": "array", "title": "管理员 ID", "items": { "type": "string" } },
+    "connection": { "type": "object", "title": "连接", "properties": {
+      "loginTimeoutMs": { "type": "integer", "title": "登录超时 ms" }, "heartbeatIntervalMs": { "type": "integer", "title": "心跳间隔 ms" },
+      "reconnect": { "type": "boolean", "title": "自动重连" }, "reconnectInitialDelayMs": { "type": "integer", "title": "初始重连延迟 ms" },
+      "reconnectMaxDelayMs": { "type": "integer", "title": "最大重连延迟 ms" }, "maxReconnectAttempts": { "type": "integer", "title": "最大重试次数" }
+    }},
+    "assessment": { "type": "object", "title": "流量评估", "properties": {
+      "windowMs": { "type": "integer", "title": "窗口 ms" }, "floodWindowMs": { "type": "integer", "title": "洪泛窗口 ms" },
+      "floodThreshold": { "type": "integer", "title": "洪泛阈值" }, "maxEventsPerWindow": { "type": "integer", "title": "窗口事件上限" }
+    }},
+    "commands": { "type": "object", "title": "命令", "properties": { "prefix": { "type": "string", "title": "前缀" }, "adminOnly": { "type": "boolean", "title": "仅管理员" }, "whitelist": { "type": "array", "title": "命令白名单", "items": { "type": "string" } }}},
+    "plugins": { "type": "object", "title": "插件", "additionalProperties": true },
+    "logging": { "type": "object", "title": "日志", "properties": { "enabled": { "type": "boolean", "title": "启用" }, "directory": { "type": "string", "title": "目录" }, "includeRawFrames": { "type": "boolean", "title": "包含原始帧" } }}
+  }
+}

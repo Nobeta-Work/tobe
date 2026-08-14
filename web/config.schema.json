@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ToBe Web configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "host": { "type": "string", "default": "0.0.0.0" },
+    "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 2222 },
+    "allowedIps": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Exact IP addresses or CIDR ranges. Empty allows every IP."
+    },
+    "trustProxy": {
+      "type": "boolean",
+      "default": false,
+      "description": "Trust the first X-Forwarded-For address. Enable only behind a trusted reverse proxy."
+    },
+    "password": {
+      "type": "string",
+      "description": "One-time plaintext password. It is replaced by a scrypt hash at startup."
+    },
+    "passwordHash": { "type": "string" },
+    "passwordSalt": { "type": "string" },
+    "autoStartAgent": { "type": "boolean", "default": true }
+  }
+}
+

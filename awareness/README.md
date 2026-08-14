@@ -57,7 +57,7 @@ awareness/
 └── adapters/      # 环境个性化实现
 ```
 
-每个 Adapter 跟踪 `config.default.json`。第一次实例化而 `config.json` 不存在时，会原子复制默认文件生成实例配置，再正常实例化和注册。`config.json` 与 Adapter 自身的 `data/` 均不受 Git 跟踪；所有运行数据路径必须位于对应 Adapter 的 `data/` 内。
+每个 Adapter 必须跟踪 `config.default.json` 和 `config.schema.json`：前者提供可运行的默认配置，后者承诺配置结构、字段说明及 `x-sensitive` 敏感字段声明，供 Web 等管理界面消费。第一次实例化而 `config.json` 不存在时，会原子复制默认文件生成实例配置，再正常实例化和注册。`config.json` 与 Adapter 自身的 `data/` 均不受 Git 跟踪；所有运行数据路径必须位于对应 Adapter 的 `data/` 内。
 
 ## 调用结果
 
