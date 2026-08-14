@@ -5,7 +5,5 @@
   "trustProxy": false,
   "password": "",
   "passwordHash": "",
-  "passwordSalt": "",
-  "autoStartAgent": true
+  "passwordSalt": ""
 }
-

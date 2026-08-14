@@ -13,7 +13,6 @@ export interface WebConfig {
   trustProxy: boolean;
   passwordHash: string;
   passwordSalt: string;
-  autoStartAgent: boolean;
 }
 
 interface StoredWebConfig extends Partial<WebConfig> {
@@ -27,7 +26,6 @@ const defaults: WebConfig = {
   trustProxy: false,
   passwordHash: "",
   passwordSalt: "",
-  autoStartAgent: true,
 };
 
 export async function loadWebConfig(): Promise<WebConfig> {
@@ -48,7 +46,6 @@ export async function loadWebConfig(): Promise<WebConfig> {
     trustProxy: stored.trustProxy ?? defaults.trustProxy,
     passwordHash: stored.passwordHash?.trim() || "",
     passwordSalt: stored.passwordSalt?.trim() || "",
-    autoStartAgent: parseBoolean(process.env.TOBE_WEB_AUTO_START, stored.autoStartAgent ?? defaults.autoStartAgent),
   };
 
   const environmentPassword = process.env.TOBE_WEB_PASSWORD;
@@ -75,6 +72,10 @@ export async function hashPassword(password: string): Promise<{ hash: string; sa
   return { hash: derived.toString("hex"), salt };
 }
 
+export async function saveWebConfig(config: WebConfig): Promise<void> {
+  await writeJsonAtomic(WEB_CONFIG_PATH, config);
+}
+
 function parsePort(value: string | undefined, fallback: number): number {
   const port = value === undefined ? fallback : Number(value);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`Invalid web port: ${value}`);
@@ -83,11 +84,4 @@ function parsePort(value: string | undefined, fallback: number): number {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
-}
-
-function parseBoolean(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined) return fallback;
-  if (["1", "true", "yes", "on"].includes(value.toLowerCase())) return true;
-  if (["0", "false", "no", "off"].includes(value.toLowerCase())) return false;
-  throw new Error(`Invalid boolean value: ${value}`);
 }

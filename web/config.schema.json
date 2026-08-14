@@ -21,8 +21,6 @@
       "description": "One-time plaintext password. It is replaced by a scrypt hash at startup."
     },
     "passwordHash": { "type": "string" },
-    "passwordSalt": { "type": "string" },
-    "autoStartAgent": { "type": "boolean", "default": true }
+    "passwordSalt": { "type": "string" }
   }
 }
-

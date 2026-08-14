@@ -55,7 +55,7 @@ npm start
 
 *注意：所有 adapters 默认禁用，需填写配置信息后调度启动。*
 
-`npm start` 启动 ToBe Web，默认监听 `0.0.0.0:2222`，并由 Web 在仓库工作目录内启动和恢复名称固定为 `tobe` 的 Pi Session。Web 会显式加载当前仓库声明的 Pi extensions，不依赖全局安装的副本。首次打开 Adapter 配置时会由 `config.default.json` 自动生成不受 Git 跟踪的 `config.json`。
+`npm start` 只启动 ToBe Web，默认监听 `0.0.0.0:2222`，不会自动运行 Agent。用户在会话页面点击“运行 Agent”后，Web 才会在仓库工作目录内启动或恢复名称固定为 `tobe` 的 Pi Session。Web 会显式加载当前仓库声明的 Pi extensions，不依赖全局安装的副本。首次打开 Adapter 配置时会由 `config.default.json` 自动生成不受 Git 跟踪的 `config.json`。
 
 如需绕过 Web 直接启动 Pi，可使用：
 

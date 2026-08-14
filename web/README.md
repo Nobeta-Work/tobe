@@ -43,7 +43,8 @@ Pi 启动时会忽略机器上全局安装的 extensions，并显式加载根 `p
 - `TOBE_WEB_HOST`
 - `TOBE_WEB_PORT`
 - `TOBE_WEB_PASSWORD`
-- `TOBE_WEB_AUTO_START`，接受 `true` 或 `false`
+
+Web 启动后不会自动运行 Agent。请在会话页面明确点击“运行 Agent”。
 
 ## Adapter 配置
 

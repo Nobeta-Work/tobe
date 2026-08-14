@@ -3,13 +3,13 @@ import { readFile, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { AgentHost } from "./agent/host.ts";
-import { loadWebConfig } from "./lib/config.ts";
+import { hashPassword, loadWebConfig, saveWebConfig, type WebConfig } from "./lib/config.ts";
 import { PUBLIC_DIR } from "./lib/paths.ts";
-import { AccessControl } from "./lib/security.ts";
+import { AccessControl, isValidIpRule } from "./lib/security.ts";
 import { getAdapter, HttpError, listAdapters, saveAdapter } from "./modules/awareness.ts";
 import { listMemory, readMemory, saveMemory } from "./modules/memory.ts";
 
-const config = await loadWebConfig();
+let config = await loadWebConfig();
 const access = new AccessControl(config);
 const agent = new AgentHost();
 const eventClients = new Set<ServerResponse>();
@@ -25,7 +25,6 @@ server.listen(config.port, config.host, () => {
   console.log(`ToBe Web listening on http://${displayHost(config.host)}:${config.port}`);
   console.log(config.allowedIps.length ? `IP whitelist: ${config.allowedIps.join(", ")}` : "IP whitelist: open access");
   console.log(access.passwordRequired ? "Password authentication: enabled" : "Password authentication: disabled");
-  if (config.autoStartAgent) void agent.start().catch((error) => console.error("Unable to start Pi:", error));
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => {
@@ -69,9 +68,35 @@ async function handleApi(request: IncomingMessage, response: ServerResponse, url
   }
   if (!access.isAuthenticated(request)) throw new HttpError(401, "需要登录");
 
+  if (request.method === "PUT" && url.pathname === "/api/access") {
+    const body = await readJson(request) as { passwordEnabled?: unknown; password?: unknown; allowedIps?: unknown };
+    const passwordEnabled = body.passwordEnabled === true;
+    const password = typeof body.password === "string" ? body.password : "";
+    if (!Array.isArray(body.allowedIps) || !body.allowedIps.every((value) => typeof value === "string")) throw new HttpError(400, "IP 白名单必须是文本列表");
+    const allowedIps = [...new Set(body.allowedIps.map((value) => value.trim()).filter(Boolean))];
+    const invalidRule = allowedIps.find((rule) => !isValidIpRule(rule));
+    if (invalidRule) throw new HttpError(400, `IP 或 CIDR 格式无效: ${invalidRule}`);
+    const wasPasswordRequired = access.passwordRequired;
+    let next: WebConfig = { ...config, allowedIps };
+    if (!passwordEnabled) next = { ...next, passwordHash: "", passwordSalt: "" };
+    else if (password) {
+      const credentials = await hashPassword(password);
+      next = { ...next, passwordHash: credentials.hash, passwordSalt: credentials.salt };
+    } else if (!next.passwordHash) throw new HttpError(400, "启用密码访问时必须填写新密码");
+    await saveWebConfig(next);
+    config = next;
+    access.updateConfig(next);
+    if (!wasPasswordRequired && passwordEnabled) access.setSessionCookie(response, access.issueSession());
+    if (!passwordEnabled) access.clearSessionCookie(response);
+    json(response, 200, { passwordEnabled: access.passwordRequired, allowedIps, currentIp: ip });
+    return;
+  }
   if (request.method === "GET" && url.pathname === "/api/bootstrap") {
     const [adapters, memory] = await Promise.all([listAdapters(), listMemory()]);
-    json(response, 200, { agent: agent.snapshot(), adapters, memory, sessionName: "tobe" });
+    json(response, 200, {
+      agent: agent.snapshot(), adapters, memory, sessionName: "tobe",
+      access: { passwordEnabled: access.passwordRequired, allowedIps: config.allowedIps, currentIp: ip },
+    });
     return;
   }
   if (request.method === "GET" && url.pathname === "/api/events") { openEventStream(request, response); return; }
@@ -162,7 +187,7 @@ function handleError(response: ServerResponse, error: unknown): void {
 }
 
 function setSecurityHeaders(response: ServerResponse): void {
-  response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+  response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data: https://nobeta.cn; font-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");

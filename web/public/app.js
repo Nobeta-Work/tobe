@@ -1,7 +1,7 @@
 const state = { bootstrap: null, agent: null, selectedAdapter: null, adapterData: null, selectedMemory: null, eventSource: null, refreshTimer: null };
 const views = {
   chat: ["SESSION TOBE", "长期会话"], adapters: ["AWARENESS", "Adapter 配置"],
-  memory: ["PERSISTENT COGNITION", "记忆审查"], system: ["WEB ACCESS", "访问说明"],
+  memory: ["PERSISTENT COGNITION", "记忆审查"], access: ["WEB ACCESS", "访问控制"],
 };
 
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
@@ -10,6 +10,8 @@ document.querySelector("#logout").addEventListener("click", logout);
 document.querySelector("#agent-toggle").addEventListener("click", toggleAgent);
 document.querySelector("#agent-abort").addEventListener("click", () => api("/api/agent/abort", { method: "POST" }).catch(showError));
 document.querySelector("#composer").addEventListener("submit", sendPrompt);
+document.querySelector("#access-form").addEventListener("submit", saveAccessControl);
+document.querySelector("#password-enabled").addEventListener("change", updatePasswordField);
 document.querySelector("#prompt").addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); document.querySelector("#composer").requestSubmit(); }
 });
@@ -51,7 +53,7 @@ async function enterApp(passwordRequired) {
   document.querySelector("#logout").hidden = !passwordRequired;
   state.bootstrap = await api("/api/bootstrap");
   state.agent = state.bootstrap.agent;
-  renderAgent(); renderAdapters(); renderMemoryList(); connectEvents();
+  renderAgent(); renderAdapters(); renderMemoryList(); renderAccessControl(); connectEvents();
   if (state.agent.processState !== "stopped") await refreshMessages();
 }
 
@@ -84,7 +86,10 @@ function renderAgent() {
   const labels = { stopped: "Agent 已停止", starting: "Agent 启动中", running: streaming ? "Agent 正在回应" : "Agent 已连接", recovering: "Agent 恢复中" };
   setStatus(agent.error && agent.processState === "recovering" ? "error" : streaming ? "busy" : agent.processState, labels[agent.processState] || "状态未知");
   const toggle = document.querySelector("#agent-toggle");
-  toggle.textContent = agent.desiredRunning || agent.processState !== "stopped" ? "停止 Agent" : "启动 Agent";
+  const running = agent.desiredRunning || agent.processState !== "stopped";
+  toggle.textContent = running ? "停止 Agent" : "运行 Agent";
+  toggle.classList.toggle("start", !running);
+  toggle.classList.toggle("stop", running);
   toggle.disabled = ["starting", "recovering"].includes(agent.processState);
   document.querySelector("#agent-abort").hidden = !streaming;
   document.querySelector("#prompt").disabled = agent.processState !== "running";
@@ -252,6 +257,36 @@ function renderMemoryEditor() {
   const form = element("form", "memory-form"); const textarea = element("textarea", "memory-text"); textarea.value = data.content; textarea.readOnly = !data.editable; textarea.setAttribute("aria-label", data.label); form.append(textarea);
   if (data.editable) { const actions = element("div", "editor-actions"); const save = element("button", "primary", "保存文本"); save.type = "submit"; actions.append(save); form.append(actions); form.addEventListener("submit", async (event) => { event.preventDefault(); try { await api(`/api/memory/${encodeURIComponent(data.id)}`, { method: "PUT", body: { content: textarea.value } }); showToast("记忆文件已保存"); } catch (error) { showError(error); } }); }
   editor.append(form);
+}
+
+function renderAccessControl() {
+  const access = state.bootstrap.access;
+  document.querySelector("#password-enabled").checked = access.passwordEnabled;
+  document.querySelector("#access-password").value = "";
+  document.querySelector("#allowed-ips").value = (access.allowedIps || []).join("\n");
+  document.querySelector("#current-ip").textContent = access.currentIp || "未知";
+  updatePasswordField();
+}
+
+function updatePasswordField() {
+  const enabled = document.querySelector("#password-enabled").checked;
+  const password = document.querySelector("#access-password");
+  password.disabled = !enabled;
+  password.closest("#password-field").classList.toggle("disabled-field", !enabled);
+}
+
+async function saveAccessControl(event) {
+  event.preventDefault();
+  const passwordEnabled = document.querySelector("#password-enabled").checked;
+  const password = document.querySelector("#access-password").value;
+  const allowedIps = document.querySelector("#allowed-ips").value.split(/[\n,]+/).map((value) => value.trim()).filter(Boolean);
+  try {
+    const access = await api("/api/access", { method: "PUT", body: { passwordEnabled, password, allowedIps } });
+    state.bootstrap.access = access;
+    document.querySelector("#logout").hidden = !access.passwordEnabled;
+    renderAccessControl();
+    showToast("访问控制已保存并立即生效");
+  } catch (error) { showError(error); }
 }
 
 async function api(path, options = {}) {

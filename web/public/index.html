@@ -5,12 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>ToBe</title>
+  <link rel="icon" type="image/webp" href="https://nobeta.cn/i/2026/08/13/bba032.webp">
+  <link rel="apple-touch-icon" href="https://nobeta.cn/i/2026/08/13/bba032.webp">
   <link rel="stylesheet" href="/style.css?v=1">
 </head>
 <body>
   <div id="login" class="login-shell" hidden>
     <form id="login-form" class="login-panel">
-      <div class="brand-mark" aria-hidden="true">T</div>
+      <img class="brand-mark" src="https://nobeta.cn/i/2026/08/13/bba032.webp" alt="ToBe">
       <p class="kicker">ToBe Control</p>
       <h1>访问长期会话</h1>
       <p class="muted">输入部署时设置的访问密码。</p>
@@ -24,14 +26,14 @@
   <div id="app" class="app-shell" hidden>
     <aside class="sidebar">
       <div class="brand-row">
-        <div class="brand-mark" aria-hidden="true">T</div>
+        <img class="brand-mark" src="https://nobeta.cn/i/2026/08/13/bba032.webp" alt="ToBe">
         <div><strong>ToBe</strong><span>长期主体控制台</span></div>
       </div>
       <nav class="nav" aria-label="主导航">
         <button class="nav-item active" data-view="chat">会话</button>
         <button class="nav-item" data-view="adapters">Adapters</button>
         <button class="nav-item" data-view="memory">Memory</button>
-        <button class="nav-item" data-view="system">访问说明</button>
+        <button class="nav-item" data-view="access">访问控制</button>
       </nav>
       <div class="sidebar-foot">
         <div class="status-line"><span id="status-dot" class="status-dot"></span><span id="status-label">正在连接</span></div>
@@ -43,7 +45,7 @@
       <header class="topbar">
         <div><p id="view-kicker" class="kicker">SESSION TOBE</p><h1 id="view-title">长期会话</h1></div>
         <div id="agent-controls" class="button-row">
-          <button id="agent-toggle" class="secondary">启动 Agent</button>
+          <button id="agent-toggle" class="agent-action start">运行 Agent</button>
           <button id="agent-abort" class="secondary" hidden>中止生成</button>
         </div>
       </header>
@@ -69,12 +71,32 @@
         <div id="memory-editor" class="editor-pane"><div class="empty-state"><h2>选择记忆文件</h2><p>使用纯文本编辑，不渲染 Markdown。</p></div></div>
       </section>
 
-      <section id="view-system" class="view prose-view">
-        <h2>访问模型</h2>
-        <p>Web 默认监听端口 2222。IP 白名单为空时允许任意来源访问，填写后仅允许精确 IP 或 CIDR 范围。</p>
-        <p>未配置密码时直接开放，不提供初始化页面。设置密码后使用 HttpOnly 会话 Cookie，明文密码会在首次启动时转换为哈希。</p>
-        <h2>运行时配置</h2>
-        <p>Adapter 配置保存后立即写入 config.json。已运行的 Adapter 不自动重载，可以在会话中要求 Agent 使用 awareness_engine 重新注册。</p>
+      <section id="view-access" class="view access-view">
+        <form id="access-form" class="access-form">
+          <div class="access-heading">
+            <h2>访问控制</h2>
+            <p>设置会立即写入 web/config.json 并应用到后续请求。</p>
+          </div>
+          <fieldset class="field-group">
+            <legend>密码访问</legend>
+            <label class="check-row"><input id="password-enabled" type="checkbox">要求输入访问密码</label>
+            <div id="password-field" class="field full">
+              <label for="access-password">新密码</label>
+              <input id="access-password" type="password" autocomplete="new-password" placeholder="留空则保持当前密码">
+              <p class="field-help">首次启用时必须填写。关闭开关会删除已保存的密码哈希。</p>
+            </div>
+          </fieldset>
+          <fieldset class="field-group">
+            <legend>IP 白名单</legend>
+            <div class="field full">
+              <label for="allowed-ips">允许访问的 IP 或 CIDR</label>
+              <textarea id="allowed-ips" rows="8" placeholder="203.0.113.8&#10;10.10.0.0/16"></textarea>
+              <p class="field-help">每行一个地址。列表为空时允许任意 IP 访问。</p>
+            </div>
+            <p class="current-ip">当前请求 IP：<code id="current-ip">未知</code></p>
+          </fieldset>
+          <div class="editor-actions"><button class="primary" type="submit">保存访问控制</button></div>
+        </form>
       </section>
     </main>
   </div>

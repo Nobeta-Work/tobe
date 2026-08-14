@@ -11,9 +11,13 @@ export class AccessControl {
   private readonly sessions = new Map<string, number>();
   private readonly failures = new Map<string, { count: number; resetAt: number }>();
 
-  constructor(private readonly config: WebConfig) {}
+  constructor(private config: WebConfig) {}
 
   get passwordRequired(): boolean { return Boolean(this.config.passwordHash); }
+
+  updateConfig(config: WebConfig): void {
+    this.config = config;
+  }
 
   clientIp(request: IncomingMessage): string {
     if (this.config.trustProxy) {
@@ -58,6 +62,12 @@ export class AccessControl {
     return null;
   }
 
+  issueSession(): string {
+    const token = randomBytes(32).toString("base64url");
+    this.sessions.set(token, Date.now() + SESSION_TTL_MS);
+    return token;
+  }
+
   logout(request: IncomingMessage): void {
     const token = parseCookies(request.headers.cookie || "").tobe_web_session;
     if (token) this.sessions.delete(token);
@@ -83,7 +93,7 @@ function normalizeIp(ip: string): string {
 }
 
 function matchesIpRule(ip: string, rule: string): boolean {
-  if (!rule.includes("/")) return normalizeIp(rule) === ip;
+  if (!rule.includes("/")) return isIP(normalizeIp(rule)) > 0 && normalizeIp(rule) === ip;
   const [networkRaw, prefixRaw] = rule.split("/", 2);
   if (!networkRaw || !prefixRaw) return false;
   const network = normalizeIp(networkRaw);
@@ -100,6 +110,16 @@ function matchesIpRule(ip: string, rule: string): boolean {
   if (remaining === 0) return true;
   const mask = (0xff << (8 - remaining)) & 0xff;
   return ((ipBytes[full] ?? 0) & mask) === ((networkBytes[full] ?? 0) & mask);
+}
+
+export function isValidIpRule(rule: string): boolean {
+  const trimmed = rule.trim();
+  if (!trimmed.includes("/")) return isIP(normalizeIp(trimmed)) > 0;
+  const [networkRaw, prefixRaw] = trimmed.split("/", 2);
+  if (!networkRaw || !prefixRaw) return false;
+  const version = isIP(normalizeIp(networkRaw));
+  const prefix = Number(prefixRaw);
+  return version > 0 && Number.isInteger(prefix) && prefix >= 0 && prefix <= (version === 4 ? 32 : 128);
 }
 
 function addressBytes(value: string, version: number): number[] {
