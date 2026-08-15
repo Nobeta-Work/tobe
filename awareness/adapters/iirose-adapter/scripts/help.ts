@@ -66,10 +66,12 @@ export async function runCommand(
   prefix: string,
   whitelist: readonly string[],
   context: CommandContext,
+  authorized = true,
 ): Promise<{ handled: boolean; response?: string; command?: string }> {
   if (!content.startsWith(prefix)) return { handled: false };
   const [name = "", ...args] = content.slice(prefix.length).trim().split(/\s+/);
   const command = COMMANDS.find((item) => item.name === name.toLowerCase());
   if (!command || !whitelist.includes(command.name)) return { handled: false };
+  if (!authorized) return { handled: true, command: command.name };
   return { handled: true, command: command.name, response: await command.execute(args, context) };
 }

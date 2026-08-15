@@ -1,13 +1,13 @@
 # feishu-adapter
 
-飞书 IM 的 Awareness Adapter。v0.1 使用飞书官方 Node SDK 长连接，覆盖私聊/群聊消息接收、owner 身份识别、@Bot 策略、去重、防刷、本地命令、文本发送和回复。
+飞书 IM 的 Awareness Adapter。使用飞书官方 Node SDK 长连接，覆盖私聊/群聊消息接收、owner 身份识别、@Bot 策略、去重、防刷、本地命令、文本发送和回复。
 
 ## 结构
 
 ```text
 feishu-adapter/
 ├── ADAPTER.ts       # 生命周期、路由和 Observation 构造
-├── config.ts        # 配置初始化及校验
+├── config.ts           # 配置初始化及校验
 ├── config.default.json # 受 Git 跟踪的默认配置
 ├── config.json      # 首次实例化时生成的实例配置
 ├── protocol.ts      # 飞书事件类型与消息内容解析

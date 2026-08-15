@@ -49,25 +49,26 @@ flowchart LR
 
 | 模块介绍 | 说明 |
 | :-: | :-: |
-| [Web](./web/README.md) | ... |
-| [Awareness](./awareness/README.md) | ... |
-| [Memory](./memory/README.md) | ... |
-| [Media](./media/README.md) | ... |
+| [Web](./web/README.md) | 单用户控制台、长期 Pi Session 与配置管理 |
+| [Awareness](./awareness/README.md) | 环境 Adapter、消息分级、主动推送与交互路由 |
+| [Memory](./memory/README.md) | 持久认知、Dream 与可演化 Skills |
+| [Media](./media/README.md) | 图片/音频识别、检索、生成与 Adapter 联动 |
 
 ## Quick Start
 
 ```bash
+# 克隆仓库
 git clone https://github.com/Nobeta-Work/tobe.git
 cd tobe
+# 安装依赖并启动 web
 npm install
 npm start
 ```
 
-*注意：所有 adapters 默认禁用，需填写配置信息后调度启动。*
+`npm start` 只启动 ToBe Web，默认监听 `0.0.0.0:2222`，不自动运行 Agent。需在会话页面点击“运行 Agent”后，才会在仓库工作目录内启动或恢复名称固定为 `tobe` 的 Pi Session。
 
-`npm start` 只启动 ToBe Web，默认监听 `0.0.0.0:2222`，不会自动运行 Agent。用户在会话页面点击“运行 Agent”后，Web 才会在仓库工作目录内启动或恢复名称固定为 `tobe` 的 Pi Session。Web 会显式加载当前仓库声明的 Pi extensions，不依赖全局安装的副本。首次打开 Adapter 或 Media 配置时，会由模块自己的 `config.default.json` 自动生成不受 Git 跟踪的 `config.json`。
-
-如需绕过 Web 直接启动 Pi，可使用：
+Web 会显式加载当前仓库声明的 Pi extensions，不依赖全局安装的副本。
+如需绕过 Web 直接启动 Pi，请使用：
 
 ```bash
 npm run start:pi
@@ -103,21 +104,19 @@ Adapter 配置、各 Adapter 的 `data/`、Memory 的实例认知、Dream 和自
 
 | 默认 Adapters | 说明 |
 | :-: | :-: |
-| [IIrose](./awareness/adapters/iirose-adapter/README.md) | 群聊 Adapter，低可靠环境置信方案 |
+| [IIROSE](./awareness/adapters/iirose-adapter/README.md) | 群聊场景，低可信环境置信方案 |
 | [Feishu](./awareness/adapters/feishu-adapter/README.md) | 飞书官方 SDK |
-| [Wechat](./awareness/adapters/wechat-adapter/README.md) | 微信 ClawBot |
+| [WeChat](./awareness/adapters/wechat-adapter/README.md) | 微信 iLink 会话与 Media 输入输出 |
 
 ## Media
 
-Media 是与 Awareness、Memory 平级的双向媒体能力，当前规范化图片与音频，并为未来的视频与文件保留扩展类型。它独立配置图片识别、语音识别、图片生成和语音生成模型 API。
+Media 提供双向媒体能力，为 Awareness 提供标准媒体类型，基于文本为 Agent 转换媒体内容。可以独立配置图片识别、语音识别、图片生成和语音生成模型 API。
 
-Web 侧边栏提供 Media 配置页面，表单结构由 `media/config.schema.json` 声明。保存后停止并重新运行 Agent 即可应用新配置。
+媒体调用分为 **检索型媒体** 与 **生成型媒体**：
+- 检索型媒体：依赖于 `media/lib` 中的本地媒体资产，无需即时生成媒体内容，适合固定响应。
+- 生成型媒体：依赖生成型 API，生成内容携带描述信息，支持后续转移固定为本地资产复用。
 
-- 入站：环境原生媒体由 Adapter 下载、解密并转为 Media 标准数据；Media 生成文本解释；Adapter 将明确的媒体类型与解释一起交给 Agent，避免把媒体和普通文本事件混淆。
-- 检索出站：Agent 先按媒体类型调用 `media_list` 获取当前 category/tag，再调用 Adapter；Adapter 以 `kind/category/tag` 向 Media 申请符合平台约束的媒体并发送。
-- 生成出站：Agent 先调用 `media_generate` 得到不透明媒体键，再调用 Adapter；Adapter 解析媒体键并转为平台数据发送。
-
-默认 Agent 仍基于文本思考。Adapter 可以自行承诺把原生多模态内容直接传给支持它的模型，但 Media 不要求所有 Agent 或 Adapter 具备该能力。
+> 默认 Agent Model 基于文本思考。Adapter 可以自行承诺把原生多模态内容直接传给支持它的模型(与 Agent Core)。
 
 ## Plan (Pending)
 

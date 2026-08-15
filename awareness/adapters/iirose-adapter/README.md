@@ -12,9 +12,9 @@ iirose-adapter/
 ├── classifier.ts       # 最近十条消息的 trust / attention 分类
 ├── message-log.ts      # logs/YYYYMM 消息日志与历史分页
 ├── protocol.ts         # IIROSE 帧编解码
-├── scripts/            # 登录、登出、监听、发送、help 等接口请求
+├── scripts/            # 登录、监听、发送、切房、点赞与官方媒体上传
 ├── tools/              # 按账号/基础/社交/管理分类的 action 描述
-├── plugins/welcome.ts  # 无模型欢迎响应与防刷
+├── plugins/            # welcome、music、active 与 room 本地插件
 └── SKILL.md            # 场景、工具参数与结果
 ```
 
@@ -56,7 +56,7 @@ Agent 不直接注册 IIROSE 专属 function tools。它先通过全局 `awarene
 
 ## Nickname 与插件命令
 
-`nickname` 是 ToBe 在当前 IIROSE 环境中的别名，不替代登录用的 `credentials.username`。每个插件可以拥有自己的 `commands`：
+`nickname` 是 ToBe 在当前 IIROSE 环境中的别名，不替代登录用的 `credentials.username`。支持命令匹配的插件使用以下字段：
 
 - `prefix`：普通字符串时要求消息以它开头；`{name}` 同时接受 IIROSE mention ` [*username*] ` 和 nickname。
 - `adminOnly`：是否只允许 `adminsIds` 中的用户执行。无权限的匹配消息仍由插件消费，不进入 Engine。
@@ -71,6 +71,8 @@ Agent 不直接注册 IIROSE 专属 function tools。它先通过全局 `awarene
 - `/follow true|false`：切换是否跟随任一管理员的切房事件；对应 tool 为 `set_follow`。
 - `like_user` 使用 IIROSE 点赞协议，仅接受普通用户 UID。
 
+`low`/`medium` 主动等级只会在管理员、@、别名或引用形成基础触发后开启相应来源的长/短窗口；`high` 才会让每条公屏消息触发。主动响应不改变私聊规则。命令和对应 tool 的切换只影响当前 Adapter 实例，重新注册后从配置重新读取。
+
 ## 点歌
 
 `plugins.music` 使用网易云公开搜索结果的第一首，通过参考插件的 IIROSE 双帧协议发送媒体卡片 `m__4@0...` 与播放事件 `&1{...}`。搜索地址、音源地址、音质、码率和颜色均在配置中。Agent 可通过 `awareness_interact` 调用 `request_music`，参数为 `{ "name": "歌名" }`。
@@ -79,6 +81,6 @@ Agent 不直接注册 IIROSE 专属 function tools。它先通过全局 `awarene
 
 ## 增量边界
 
-`send_media` 把 Media 服务解析出的图片/音频字节，以 `credentials.uid` 作为 multipart 的 `i` 字段、文件作为 `f[]` 上传到 IIROSE 官方 `file_upload.php`。图片响应为 `i/...`，实测 WAV 音频响应为 `m/...`，两者都会与 `http://r.iirose.com/` 拼接；图片使用 `[URL#e]`，音频使用播放卡片协议。撤回、服务发现与完整 IIROSE 富文本仍可增量实现。
+`send_media` 把 Media 服务解析出的图片/音频字节，以 `credentials.uid` 作为 multipart 的 `i` 字段、文件作为 `f[]` 上传到 IIROSE 官方 `file_upload.php`。图片响应为 `i/...`，WAV 音频实测返回 `m/...`，两者都会与 `http://r.iirose.com/` 拼接；图片使用 `[URL#e]`，音频沿用点歌播放卡片协议。该 action 只发送到当前公屏，不提供私聊媒体参数。撤回、服务发现与完整 IIROSE 富文本仍可增量实现。
 
 协议实现参考 [adapter-iirose](https://github.com/iirose-plugins/adapter-iirose) 与 [IIROSE 插件文档](https://iirose-plugins.github.io/iirose-plugins-docs/)；本实现没有复制 Koishi 运行时。

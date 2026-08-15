@@ -148,6 +148,7 @@ export class IIroseAdapter implements EnvAdapter {
           });
         }
         case "send_media": {
+          if (!this.#client.connected) throw new Error("IIROSE adapter is not connected");
           const service = this.#mediaServiceOverride ?? getMedia();
           if (!service) throw new Error("Media capability is not loaded");
           const resolved = await service.resolve(parseMediaInput(interaction.args.media), {
@@ -274,6 +275,7 @@ export class IIroseAdapter implements EnvAdapter {
             return `跟随管理员切房已${parsed ? "开启" : "关闭"}`;
           },
         },
+        !this.#config.commands.adminOnly || isAdmin,
       );
       if (command.handled) {
         if ((!this.#config.commands.adminOnly || isAdmin) && command.response) {

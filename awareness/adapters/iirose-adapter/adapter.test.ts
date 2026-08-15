@@ -10,6 +10,7 @@ import { ActivePlugin } from "./plugins/active.ts";
 import { parseIncomingFrame } from "./protocol.ts";
 import { uploadIIroseMedia } from "./scripts/upload-media.ts";
 import type { IIroseConfig } from "./config.ts";
+import { runCommand, type CommandContext } from "./scripts/help.ts";
 
 const entry = (index: number): MessageLogEntry => ({
   receivedAt: new Date(2026, 7, 16).getTime(), timestamp: index, source: "room",
@@ -95,4 +96,18 @@ test("official IIROSE upload accepts the m/ path returned for audio", async () =
     }, data: new Uint8Array([0x52, 0x49, 0x46, 0x46]),
   }, async () => new Response("m/26/8/16/6/5132-LW.wav", { status: 200 }));
   assert.equal(uploaded.url, "http://r.iirose.com/m/26/8/16/6/5132-LW.wav");
+});
+
+test("admin-only local commands are consumed without executing side effects", async () => {
+  let changed = false;
+  const context: CommandContext = {
+    status: () => "ok", pluginCommands: () => [],
+    active: () => { changed = true; return "changed"; },
+    room: async () => { changed = true; return "changed"; },
+    follow: () => { changed = true; return "changed"; },
+  };
+  const result = await runCommand("/active high", "/", ["active"], context, false);
+  assert.equal(result.handled, true);
+  assert.equal(result.response, undefined);
+  assert.equal(changed, false);
 });

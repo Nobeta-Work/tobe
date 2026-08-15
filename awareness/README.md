@@ -21,6 +21,7 @@ Pi Agent
 - Pi 暴露三个稳定工具：`awareness_observe` 负责 Adapter/Engine 只读观察，`awareness_interact` 只负责 Adapter 写操作，`awareness_engine` 只负责 Adapter 生命周期管理。
 - Adapter 的环境动作仍然收敛在 observe/interact 的 `action + args` 下，不会为每个 Adapter 增加全局工具。
 - Engine 只认识通用 `Observation` 信封。房间、消息、设备等字段全部属于具体 Adapter 的 `content`。
+- `trust` 表示来源参与程度，不证明正文为事实，也不会把环境文本提升成系统指令；身份字段必须按对应 Adapter 的 Skill 解释。
 - `adapter_id` 在扫描注册时生成，在当前 extension runtime 内唯一且稳定；不以是否已登录为条件。
 - Engine 的 `subscribe()` 会由 extension 桥接到 `pi.sendMessage`，不是等待 Agent 调用 `drain` 的轮询接口。
 
@@ -31,6 +32,16 @@ Pi Agent
 - `off`：不发布到 Agent，只允许 Adapter 内部白名单逻辑处理。
 
 因此 `drain` 只是补充读取已发布观察的接口，不是消息到达 Agent 的必要步骤。Extension 在 shutdown 时先解除推送订阅，再停止 Adapter，避免关闭事件额外唤起 Agent。
+
+## 权限声明
+
+Engine 根据 `trust` 为每条发布的 Observation 附加 `permissions`：
+
+- `low/off`：禁止工作区写入，只允许直接回复或检索型媒体；`off` 本身不会发布给 Agent。
+- `medium`：禁止工作区写入，允许回复、检索/生成媒体及相关通道操作。
+- `high/max`：允许工作区内写入，并开放相应媒体、通道和工作区操作。
+
+权限声明限制本次环境来源可以驱动的动作，不改变 Agent Core 的系统安全边界。
 
 ## Actor
 
