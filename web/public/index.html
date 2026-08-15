@@ -7,7 +7,7 @@
   <title>ToBe</title>
   <link rel="icon" type="image/webp" href="https://nobeta.cn/i/2026/08/13/bba032.webp">
   <link rel="apple-touch-icon" href="https://nobeta.cn/i/2026/08/13/bba032.webp">
-  <link rel="stylesheet" href="/style.css?v=2">
+  <link rel="stylesheet" href="/style.css?v=4">
 </head>
 <body>
   <div id="login" class="login-shell" hidden>
@@ -32,6 +32,7 @@
       <nav class="nav" aria-label="主导航">
         <button class="nav-item active" data-view="chat"><span class="nav-icon">◌</span><span>会话</span></button>
         <button class="nav-item" data-view="adapters"><span class="nav-icon">⌁</span><span>Adapters</span></button>
+        <button class="nav-item" data-view="media"><span class="nav-icon">▧</span><span>Media</span></button>
         <button class="nav-item" data-view="memory"><span class="nav-icon">◇</span><span>Memory</span></button>
       </nav>
       <div class="sidebar-bottom">
@@ -74,6 +75,10 @@
         <div id="adapter-editor" class="editor-pane"><div class="empty-state"><span class="empty-glyph">⌁</span><h2>选择 Adapter</h2><p>配置由各 Adapter 的 schema 声明，敏感值不会回传。</p></div></div>
       </section>
 
+      <section id="view-media" class="view module-view">
+        <div id="media-editor" class="editor-pane"><div class="empty-state"><span class="empty-glyph">▧</span><h2>正在读取 Media 配置</h2><p>配置结构由 Media 模块自己的 schema 声明。</p></div></div>
+      </section>
+
       <section id="view-memory" class="view split-view">
         <div class="index-pane"><div class="pane-heading"><p class="eyebrow">PERSISTENT COGNITION</p><h2>Memory</h2><p>审查和编辑长期主体的文本记忆。</p></div><div id="memory-list" class="item-list"></div></div>
         <div id="memory-editor" class="editor-pane"><div class="empty-state"><span class="empty-glyph">◇</span><h2>选择记忆文件</h2><p>使用纯文本编辑，不渲染 Markdown。</p></div></div>
@@ -114,6 +119,6 @@
     </form>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script type="module" src="/app.js?v=2"></script>
+  <script type="module" src="/app.js?v=4"></script>
 </body>
 </html>

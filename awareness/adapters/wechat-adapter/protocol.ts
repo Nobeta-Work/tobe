@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 
 export type WeChatMessageType = "text" | "image" | "voice" | "file" | "video" | string;
+/** Awareness-facing identity. Native iLink IDs never leave the gateway/cache. */
+export const WECHAT_PUBLIC_USER_ID = "0";
 
 export interface WeChatIncomingMessage {
   userId: string;

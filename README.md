@@ -10,12 +10,11 @@
 **ToBe** 致力于孕育具备独立人格的数字主体：
 
 - **only** : 每一个 ToBe 主体都具有稳定的实例连续性。
-- **grow** : 随交互经历持续自主演进，具备随时间生长的生命力。
+- **grow** : 随交互经历持续自主演进，具备随时间成长的生命力。
 - **multi**: 多感知接入与多形态执行，持续扩展丰富的感知与广阔的表达边界。
 
 
 ```mermaid
-
 ---
 title: 业务架构图
 ---
@@ -48,6 +47,13 @@ flowchart LR
 
 ```
 
+| 模块介绍 | 说明 |
+| :-: | :-: |
+| [Web](./web/README.md) | ... |
+| [Awareness](./awareness/README.md) | ... |
+| [Memory](./memory/README.md) | ... |
+| [Media](./media/README.md) | ... |
+
 ## Quick Start
 
 ```bash
@@ -59,7 +65,7 @@ npm start
 
 *注意：所有 adapters 默认禁用，需填写配置信息后调度启动。*
 
-`npm start` 只启动 ToBe Web，默认监听 `0.0.0.0:2222`，不会自动运行 Agent。用户在会话页面点击“运行 Agent”后，Web 才会在仓库工作目录内启动或恢复名称固定为 `tobe` 的 Pi Session。Web 会显式加载当前仓库声明的 Pi extensions，不依赖全局安装的副本。首次打开 Adapter 配置时会由 `config.default.json` 自动生成不受 Git 跟踪的 `config.json`。
+`npm start` 只启动 ToBe Web，默认监听 `0.0.0.0:2222`，不会自动运行 Agent。用户在会话页面点击“运行 Agent”后，Web 才会在仓库工作目录内启动或恢复名称固定为 `tobe` 的 Pi Session。Web 会显式加载当前仓库声明的 Pi extensions，不依赖全局安装的副本。首次打开 Adapter 或 Media 配置时，会由模块自己的 `config.default.json` 自动生成不受 Git 跟踪的 `config.json`。
 
 如需绕过 Web 直接启动 Pi，可使用：
 
@@ -95,11 +101,17 @@ Adapter 配置、各 Adapter 的 `data/`、Memory 的实例认知、Dream 和自
 
 允许感知层提供交互接口，交互是感知的延申。感知与交互由对应的 Adapter 承诺。
 
-> 默认提供的 Adapters: `iirose-dapter`、`feishu-adapter`、`wechat-adapter`
+| 默认 Adapters | 说明 |
+| :-: | :-: |
+| [IIrose](./awareness/adapters/iirose-adapter/README.md) | 群聊 Adapter，低可靠环境置信方案 |
+| [Feishu](./awareness/adapters/feishu-adapter/README.md) | 飞书官方 SDK |
+| [Wechat](./awareness/adapters/wechat-adapter/README.md) | 微信 ClawBot |
 
 ## Media
 
 Media 是与 Awareness、Memory 平级的双向媒体能力，当前规范化图片与音频，并为未来的视频与文件保留扩展类型。它独立配置图片识别、语音识别、图片生成和语音生成模型 API。
+
+Web 侧边栏提供 Media 配置页面，表单结构由 `media/config.schema.json` 声明。保存后停止并重新运行 Agent 即可应用新配置。
 
 - 入站：环境原生媒体由 Adapter 下载、解密并转为 Media 标准数据；Media 生成文本解释；Adapter 将明确的媒体类型与解释一起交给 Agent，避免把媒体和普通文本事件混淆。
 - 检索出站：Agent 先按媒体类型调用 `media_list` 获取当前 category/tag，再调用 Adapter；Adapter 以 `kind/category/tag` 向 Media 申请符合平台约束的媒体并发送。

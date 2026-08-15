@@ -1,6 +1,6 @@
 const state = {
   bootstrap: null, agent: null, messages: [], liveMessage: null,
-  selectedAdapter: null, adapterData: null, selectedMemory: null,
+  selectedAdapter: null, adapterData: null, mediaData: null, mediaLoading: false, selectedMemory: null,
   eventSource: null, refreshTimer: null, dialogQueue: [], activeDialog: null,
   extensionStatuses: new Map(), widgets: new Map(), liveRenderPending: false,
 };
@@ -8,6 +8,7 @@ const state = {
 const views = {
   chat: ["SESSION / TOBE", "长期会话"],
   adapters: ["AWARENESS", "Adapter 配置"],
+  media: ["MEDIA", "Media 配置"],
   memory: ["PERSISTENT COGNITION", "记忆审查"],
   settings: ["TOBE WEB", "设置"],
 };
@@ -82,6 +83,7 @@ function showView(name) {
   document.querySelector("#view-kicker").textContent = views[name][0];
   document.querySelector("#view-title").textContent = views[name][1];
   document.querySelector("#agent-controls").hidden = name !== "chat";
+  if (name === "media") void loadMediaConfig();
 }
 
 function connectEvents() {
@@ -396,7 +398,7 @@ function renderAdapterEditor() {
   editor.append(heading);
   const form = element("form", "config-form");
   const grid = element("div", "field-grid");
-  renderSchemaProperties(grid, data.schema.properties || {}, data.config, "");
+  renderSchemaProperties(grid, data.schema.properties || {}, data.config, "", data.sensitive);
   form.append(grid);
   const actions = element("div", "editor-actions");
   const reset = element("button", "secondary", "恢复默认");
@@ -410,7 +412,7 @@ function renderAdapterEditor() {
   editor.append(form);
 }
 
-function renderSchemaProperties(parent, properties, current, prefix) {
+function renderSchemaProperties(parent, properties, current, prefix, sensitive = {}) {
   for (const [key, schema] of Object.entries(properties)) {
     const path = prefix ? `${prefix}.${key}` : key;
     const value = current?.[key];
@@ -418,20 +420,21 @@ function renderSchemaProperties(parent, properties, current, prefix) {
       const group = element("fieldset", "field-group full");
       group.append(element("legend", "", schema.title || key));
       const grid = element("div", "field-grid");
-      renderSchemaProperties(grid, schema.properties, value || {}, path);
+      renderSchemaProperties(grid, schema.properties, value || {}, path, sensitive);
       group.append(grid);
       parent.append(group);
       continue;
     }
     const field = element("div", `field ${schema.type === "array" || schema.type === "object" ? "full" : ""}`);
+    const inputId = `config-${path.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
     if (schema.type === "boolean") {
-      const row = element("label", "check-row");
+      field.classList.add("boolean-field");
       const input = document.createElement("input");
-      input.type = "checkbox"; input.checked = Boolean(value); input.dataset.path = path; input.dataset.kind = "boolean";
-      row.append(input, document.createTextNode(schema.title || key));
-      field.append(row);
+      input.id = inputId; input.type = "checkbox"; input.checked = Boolean(value); input.dataset.path = path; input.dataset.kind = "boolean";
+      const label = element("label", "", schema.title || key); label.htmlFor = inputId;
+      field.append(label, input);
     } else {
-      field.append(element("label", "", schema.title || key));
+      const label = element("label", "", schema.title || key); label.htmlFor = inputId; field.append(label);
       let input;
       if (schema.type === "array" || schema.type === "object") {
         input = document.createElement("textarea"); input.rows = 3; input.value = JSON.stringify(value ?? (schema.type === "array" ? [] : {}), null, 2); input.dataset.kind = "json";
@@ -440,42 +443,98 @@ function renderSchemaProperties(parent, properties, current, prefix) {
       } else {
         input = document.createElement("input"); input.type = schema["x-sensitive"] ? "password" : schema.type === "integer" || schema.type === "number" ? "number" : "text"; input.value = schema["x-sensitive"] ? "" : value ?? ""; input.dataset.kind = schema.type || "string";
       }
+      input.id = inputId;
       input.dataset.path = path;
       if (schema["x-sensitive"]) {
         input.dataset.sensitive = "true";
-        input.placeholder = state.adapterData.sensitive[path] ? "已设置，留空则保持不变" : "未设置";
-        const clearLabel = element("label", "check-row");
+        input.placeholder = sensitive[path] ? "已设置，留空则保持不变" : "未设置";
+        const clearLabel = element("label", "check-row sensitive-clear");
         const clear = document.createElement("input"); clear.type = "checkbox"; clear.dataset.clearSensitive = path;
         clearLabel.append(clear, document.createTextNode("清除已保存的值"));
         field.append(input, clearLabel);
       } else field.append(input);
     }
+    if (schema.description) field.append(element("p", "field-help", schema.description));
     parent.append(field);
   }
 }
 
 async function saveAdapterConfig(event) {
   event.preventDefault();
-  const config = structuredClone(state.adapterData.config);
-  const sensitiveUpdates = {};
-  const clearSensitive = [];
   try {
-    event.currentTarget.querySelectorAll("[data-path]").forEach((input) => {
-      const path = input.dataset.path;
-      if (input.dataset.sensitive === "true") { if (input.value) sensitiveUpdates[path] = input.value; return; }
-      let value = input.value;
-      if (input.dataset.kind === "boolean") value = input.checked;
-      else if (input.dataset.kind === "integer") value = Number.parseInt(value, 10);
-      else if (input.dataset.kind === "number") value = Number(value);
-      else if (input.dataset.kind === "json") value = JSON.parse(value);
-      setPath(config, path, value);
-    });
-    event.currentTarget.querySelectorAll("[data-clear-sensitive]:checked").forEach((input) => clearSensitive.push(input.dataset.clearSensitive));
+    const { config, sensitiveUpdates, clearSensitive } = readSchemaForm(event.currentTarget, state.adapterData.config);
     const result = await api(`/api/adapters/${encodeURIComponent(state.selectedAdapter)}`, { method: "PUT", body: { config, sensitiveUpdates, clearSensitive } });
     showToast(result.message);
     state.adapterData = await api(`/api/adapters/${encodeURIComponent(state.selectedAdapter)}`);
     renderAdapterEditor();
   } catch (error) { showError(error); }
+}
+
+async function loadMediaConfig() {
+  if (state.mediaLoading) return;
+  const editor = document.querySelector("#media-editor");
+  state.mediaLoading = true;
+  editor.innerHTML = '<div class="empty-state"><h2>正在读取配置</h2><p>读取 media/config.json 与模块 schema。</p></div>';
+  try {
+    state.mediaData = await api("/api/media");
+    renderMediaEditor();
+  } catch (error) {
+    editor.innerHTML = `<div class="empty-state"><h2>无法编辑</h2><p>${escapeText(error.message)}</p></div>`;
+  } finally { state.mediaLoading = false; }
+}
+
+function renderMediaEditor() {
+  const data = state.mediaData;
+  const editor = document.querySelector("#media-editor");
+  editor.replaceChildren();
+  const heading = element("div", "editor-heading");
+  const headingText = element("div");
+  headingText.append(element("p", "eyebrow", "MEDIA CONFIG"), element("h2", "", data.schema.title || "Media"), element("p", "", "保存立即写入文件，并在下一次运行 Agent 时生效。"));
+  heading.append(headingText);
+  editor.append(heading);
+  const form = element("form", "config-form");
+  const grid = element("div", "field-grid");
+  renderSchemaProperties(grid, data.schema.properties || {}, data.config, "", data.sensitive);
+  form.append(grid);
+  const actions = element("div", "editor-actions");
+  const reset = element("button", "secondary", "恢复默认");
+  reset.type = "button";
+  reset.addEventListener("click", () => { state.mediaData.config = structuredClone(data.defaults); renderMediaEditor(); });
+  const save = element("button", "primary", "保存配置");
+  save.type = "submit";
+  actions.append(reset, save);
+  form.append(actions);
+  form.addEventListener("submit", saveMediaConfig);
+  editor.append(form);
+}
+
+async function saveMediaConfig(event) {
+  event.preventDefault();
+  try {
+    const { config, sensitiveUpdates, clearSensitive } = readSchemaForm(event.currentTarget, state.mediaData.config);
+    const result = await api("/api/media", { method: "PUT", body: { config, sensitiveUpdates, clearSensitive } });
+    showToast(result.message);
+    state.mediaData = await api("/api/media");
+    renderMediaEditor();
+  } catch (error) { showError(error); }
+}
+
+function readSchemaForm(form, currentConfig) {
+  const config = structuredClone(currentConfig);
+  const sensitiveUpdates = {};
+  const clearSensitive = [];
+  form.querySelectorAll("[data-path]").forEach((input) => {
+    const path = input.dataset.path;
+    if (input.dataset.sensitive === "true") { if (input.value) sensitiveUpdates[path] = input.value; return; }
+    let value = input.value;
+    if (input.dataset.kind === "boolean") value = input.checked;
+    else if (input.dataset.kind === "integer") value = Number.parseInt(value, 10);
+    else if (input.dataset.kind === "number") value = Number(value);
+    else if (input.dataset.kind === "json") value = JSON.parse(value);
+    setPath(config, path, value);
+  });
+  form.querySelectorAll("[data-clear-sensitive]:checked").forEach((input) => clearSensitive.push(input.dataset.clearSensitive));
+  return { config, sensitiveUpdates, clearSensitive };
 }
 
 function renderMemoryList() {

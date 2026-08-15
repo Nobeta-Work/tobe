@@ -12,3 +12,4 @@ Awareness 作为 Pi extension 向 Agent Core 暴露三个稳定入口：
 8. Awareness Observation 会由 extension 主动注入会话并触发 Agent turn：high 使用 steer，low/medium 在聚合后使用 followUp。不要依赖轮询 `drain` 才接收环境消息。
 9. `assistant` actor 表示 ToBe 自身信息；`service` 表示其他主体参与构成的实际场景，而不是可信系统服务。
 10. `awareness_engine/register_adapter` 只接受 `awareness/adapters/<adapter_name>/ADAPTER.ts` 下的目录名，不接受任意路径。新 Adapter 必须先完成文件创建与必要校验，再注册。
+11. Engine 按 `trust` 附加 `permissions`：low 只可直接回复或检索媒体；medium 不可写工作区但可用媒体/通道工具；high/max 才允许工作区内写操作。

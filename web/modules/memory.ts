@@ -2,7 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { MEMORY_DIR } from "../lib/paths.ts";
 import { writeTextAtomic } from "../lib/files.ts";
-import { HttpError } from "./awareness.ts";
+import { HttpError } from "../lib/schema-config.ts";
 
 interface MemoryEntry { id: string; label: string; editable: boolean; exists: boolean; kind: "cognition" | "dream" | "skill"; }
 
@@ -72,4 +72,3 @@ async function exists(path: string): Promise<boolean> {
 }
 
 function isSafeName(value: string): boolean { return basename(value) === value && /^[a-zA-Z0-9_-]+$/.test(value); }
-

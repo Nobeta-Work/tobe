@@ -11,4 +11,5 @@ export const RPC_COMMANDS_EXTENSION_PATH = join(WEB_DIR, "rpc-commands-extension
 export const WEB_CONFIG_PATH = join(WEB_DIR, "config.json");
 export const WEB_CONFIG_DEFAULT_PATH = join(WEB_DIR, "config.default.json");
 export const ADAPTERS_DIR = join(REPO_DIR, "awareness", "adapters");
+export const MEDIA_DIR = join(REPO_DIR, "media");
 export const MEMORY_DIR = join(REPO_DIR, "memory");

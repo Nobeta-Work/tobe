@@ -1,6 +1,9 @@
 export interface CommandContext {
   status(): string;
   pluginCommands(): readonly string[];
+  active(level: string): string;
+  room(roomId: string): Promise<string>;
+  follow(value: string): string;
 }
 
 export interface CommandDefinition {
@@ -29,6 +32,24 @@ export const COMMANDS: readonly CommandDefinition[] = [
     usage: "/status",
     description: "显示当前连接状态",
     execute: (_args, context) => context.status(),
+  },
+  {
+    name: "active",
+    usage: "/active {off|low|medium|high}",
+    description: "切换主动响应等级",
+    execute: (args, context) => context.active(args[0] ?? ""),
+  },
+  {
+    name: "room",
+    usage: "/room {roomId}",
+    description: "切换机器人所在房间",
+    execute: (args, context) => context.room(args[0] ?? ""),
+  },
+  {
+    name: "follow",
+    usage: "/follow {true|false}",
+    description: "切换是否跟随管理员换房",
+    execute: (args, context) => context.follow(args[0] ?? ""),
   },
 ];
 

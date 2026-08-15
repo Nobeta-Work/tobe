@@ -1,6 +1,6 @@
 # ToBe Web
 
-ToBe Web 是仓库内的单用户控制台。它维护一个名称固定为 `tobe` 的长期 Pi Session，提供完整的流式对话、Awareness Adapter 配置、Memory 文本审查和部署设置。
+ToBe Web 是仓库内的单用户控制台。它维护一个名称固定为 `tobe` 的长期 Pi Session，提供完整的流式对话、Awareness Adapter 配置、Media 配置、Memory 文本审查和部署设置。
 
 ## 启动
 
@@ -67,6 +67,12 @@ Web 扫描 `awareness/adapters/*-adapter`。每个 Adapter 必须以自身目录
 缺少 `config.json` 时，首次打开配置会复制 `config.default.json`。保存操作直接更新文件，但不会热重载已经实例化的 Adapter。可以在会话中要求 Agent 使用 `awareness_engine` 注销并重新注册该 Adapter。
 
 标记为 `x-sensitive: true` 的字段不会通过 API 回传实际值。空白输入保持原值，用户可以显式选择清除。
+
+## Media 配置
+
+侧边栏中的 Media 页面读取 `media/config.schema.json`，并生成图片识别、音频识别、图片生成和音频生成的配置表单。缺少 `media/config.json` 时，首次打开页面会复制 `media/config.default.json`。
+
+保存会直接更新 `media/config.json`。Media 在 Agent 启动时实例化，因此运行中的 Agent 不会热重载该配置；停止并重新运行 Agent 后生效。`apiKeyEnv` 填写环境变量名称，实际 API Key 不写入 Media 配置文件。
 
 ## Memory
 

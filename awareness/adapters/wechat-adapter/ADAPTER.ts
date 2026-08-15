@@ -3,9 +3,9 @@ import { fileURLToPath } from "node:url";
 import { getMedia, mediaErrorResult, parseMediaInput } from "../../../media/index.ts";
 import type { MediaData, MediaService } from "../../../media/type.ts";
 import type { AdapterHealth, EnvAdapter, ObservationListener, Unsubscribe } from "../../adapter.ts";
-import type { Actor, AdapterCallResult, Interaction, Level, Observation, ObserveRequest } from "../../type.ts";
+import type { AdapterCallResult, Interaction, Level, Observation, ObserveRequest } from "../../type.ts";
 import { loadConfig, type WeChatConfig } from "./config.ts";
-import { messageFingerprint, publicMessageId, type WeChatIncomingMessage } from "./protocol.ts";
+import { messageFingerprint, publicMessageId, WECHAT_PUBLIC_USER_ID, type WeChatIncomingMessage } from "./protocol.ts";
 import { SdkWeChatGateway, type LoginCallbacks, type WeChatCredentials, type WeChatGateway, type WeChatGatewayEvents } from "./scripts/client.ts";
 import { WECHAT_ACTIONS } from "./tools/index.ts";
 
@@ -18,7 +18,7 @@ export interface WeChatAdapterOptions { configPath?: string; config?: WeChatConf
 export class WeChatAdapter implements EnvAdapter {
   readonly id = randomUUID().replaceAll("-", "").slice(0, 10);
   readonly name = "wechat-adapter";
-  readonly permission: Level = "medium";
+  readonly permission: Level = "high";
   readonly autoStart: boolean;
   readonly #config: WeChatConfig;
   readonly #gateway: WeChatGateway;
@@ -97,7 +97,7 @@ export class WeChatAdapter implements EnvAdapter {
           return this.#result(interaction.call_id, interaction.action, { status: "success" });
         case "send_message": {
           this.#assertOnline();
-          const userId = requireString(interaction.args.userId, "userId");
+          const userId = requirePublicUserId(interaction.args.userId);
           const content = requireString(interaction.args.content, "content");
           await this.#gateway.sendText(userId, content);
           return this.#result(interaction.call_id, interaction.action, { status: "success", userId });
@@ -113,13 +113,13 @@ export class WeChatAdapter implements EnvAdapter {
         }
         case "send_media": {
           this.#assertOnline();
-          const userId = requireString(interaction.args.userId, "userId");
+          const userId = requirePublicUserId(interaction.args.userId);
           if (!this.#gateway.sendMedia) throw new Error("WeChat gateway does not support media sending");
           const service = this.#requireMediaService();
           const resolved = await service.resolve(parseMediaInput(interaction.args.media), wechatMediaConstraints());
           const caption = optionalString(interaction.args.caption, "caption");
           await this.#gateway.sendMedia(userId, resolved, caption);
-          return this.#result(interaction.call_id, interaction.action, { status: "success", userId, media: resolved.artifact });
+          return this.#result(interaction.call_id, interaction.action, { status: "success", userId, media: resolved.artifact, delivery: mediaDelivery(resolved.artifact.kind) });
         }
         case "reply_media": {
           this.#assertOnline();
@@ -131,11 +131,11 @@ export class WeChatAdapter implements EnvAdapter {
           const resolved = await service.resolve(parseMediaInput(interaction.args.media), wechatMediaConstraints());
           const caption = optionalString(interaction.args.caption, "caption");
           await this.#gateway.replyMedia(cached, resolved, caption);
-          return this.#result(interaction.call_id, interaction.action, { status: "success", messageId, media: resolved.artifact });
+          return this.#result(interaction.call_id, interaction.action, { status: "success", messageId, media: resolved.artifact, delivery: mediaDelivery(resolved.artifact.kind) });
         }
         case "send_typing": {
           this.#assertOnline();
-          const userId = requireString(interaction.args.userId, "userId");
+          const userId = requirePublicUserId(interaction.args.userId);
           await this.#gateway.sendTyping(userId);
           return this.#result(interaction.call_id, interaction.action, { status: "success", userId });
         }
@@ -159,23 +159,21 @@ export class WeChatAdapter implements EnvAdapter {
     if (this.#seen.has(fingerprint)) return;
     this.#seen.set(fingerprint, now + this.#config.events.dedupeTtlMs);
     if (!this.#config.receive.messageTypes.includes(message.type)) return;
-    if (this.#config.receive.denyUsers.includes(message.userId)) return;
-    if (this.#config.receive.allowUsers.length && !this.#config.receive.allowUsers.includes(message.userId)) return;
+    await this.#gateway.rememberUser?.(message.userId);
     const messageId = publicMessageId(message);
     this.#messages.set(messageId, { message, expiresAt: now + this.#config.events.messageCacheTtlMs });
     while (this.#messages.size > this.#config.events.maxCachedMessages) this.#messages.delete(this.#messages.keys().next().value as string);
     this.#health = { ...this.#health, lastEventAt: now };
-    const actor: Actor = this.#config.identity.ownerIds.includes(message.userId) ? "user" : "service";
     const recognized = await this.#recognizeMedia(message);
     await this.#emit({
-      id: fingerprint, adapter_id: this.id, adapter_name: this.name, source: `wechat:${message.userId}`, actor,
+      id: fingerprint, adapter_id: this.id, adapter_name: this.name, source: `wechat:${WECHAT_PUBLIC_USER_ID}`, actor: "user",
       content: {
-        eventType: "message.received", messageId, userId: message.userId, messageType: message.type,
+        eventType: "message.received", messageId, userId: WECHAT_PUBLIC_USER_ID, messageType: message.type,
         text: recognized?.text ?? message.text,
         ...(recognized ? { media: recognized.media, mediaRecognition: recognized.recognition } : mediaMarker(message.type)),
         ...(message.quotedMessage ? { quotedMessage: message.quotedMessage } : {}), transport: "ilink_long_poll", transportVerified: true,
       },
-      trust: actor === "user" ? "high" : "low", attention: actor === "user" ? "high" : "medium", timestamp: message.timestamp.getTime(),
+      trust: "high", attention: "high", timestamp: message.timestamp.getTime(),
     });
   }
 
@@ -306,6 +304,11 @@ export class WeChatAdapter implements EnvAdapter {
 }
 
 function requireString(value: unknown, name: string): string { if (typeof value !== "string" || !value.trim()) throw new Error(`${name} must be a non-empty string`); return value.trim(); }
+function requirePublicUserId(value: unknown): string {
+  const userId = requireString(value, "userId");
+  if (userId !== WECHAT_PUBLIC_USER_ID) throw new Error(`userId must be ${WECHAT_PUBLIC_USER_ID}`);
+  return userId;
+}
 function optionalString(value: unknown, name: string): string | undefined { if (value === undefined) return undefined; return requireString(value, name); }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 function mediaMarker(type: string): { media: { kind: string }; mediaRecognition: { status: "unavailable" } } | {} {
@@ -313,7 +316,8 @@ function mediaMarker(type: string): { media: { kind: string }; mediaRecognition:
   return kind ? { media: { kind }, mediaRecognition: { status: "unavailable" } } : {};
 }
 function wechatMediaConstraints() {
-  return { kinds: ["image", "audio", "video", "file"] as const, mimeTypes: ["image/jpeg", "image/png", "image/gif", "image/webp", "audio/mpeg", "audio/wav", "audio/ogg", "audio/mp4", "video/mp4", "application/octet-stream"], maxBytes: 20 * 1024 * 1024, image: { allowAnimated: true } };
+  return { kinds: ["image", "audio"] as const, mimeTypes: ["image/jpeg", "image/png", "image/gif", "image/webp", "audio/mpeg", "audio/wav", "audio/ogg", "audio/mp4"], maxBytes: 20 * 1024 * 1024, image: { allowAnimated: true } };
 }
+function mediaDelivery(kind: string): "native_image" | "audio_file" { return kind === "image" ? "native_image" : "audio_file"; }
 export function createAdapter(): EnvAdapter { return new WeChatAdapter(); }
 export default createAdapter;

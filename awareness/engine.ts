@@ -13,6 +13,7 @@ import type {
   EngineRequest,
   Interaction,
   Observation,
+  PermissionDeclaration,
   ObserveRequest,
 } from "./type.ts";
 
@@ -135,6 +136,7 @@ export class AwarenessEngineImpl implements AwarenessEngine {
   async #accept(observation: Observation): Promise<void> {
     if (!this.#adapters.has(observation.adapter_id)) return;
     if (observation.attention === "off") return;
+    observation = { ...observation, permissions: permissionDeclaration(observation.trust) };
     if (observation.attention === "high" || observation.attention === "max") {
       await this.#emit(observation);
       return;
@@ -233,6 +235,24 @@ export class AwarenessEngineImpl implements AwarenessEngine {
     if (typeof value !== "string" || !value.trim()) throw new Error(`${name} must be a non-empty string`);
     return value.trim();
   }
+}
+
+export function permissionDeclaration(trust: Observation["trust"]): PermissionDeclaration {
+  if (trust === "low" || trust === "off") return {
+    workspaceWrite: false,
+    allowedToolClasses: ["response", "retrieval_media"],
+    instruction: "该来源不具备写权限，也不得调用除检索型媒体外的工具；直接返回消息。",
+  };
+  if (trust === "medium") return {
+    workspaceWrite: false,
+    allowedToolClasses: ["response", "retrieval_media", "generative_media", "channel"],
+    instruction: "该来源不具备写权限；允许生成型媒体、检索型媒体及相关通道工具。",
+  };
+  return {
+    workspaceWrite: true,
+    allowedToolClasses: ["response", "retrieval_media", "generative_media", "channel", "workspace"],
+    instruction: "该来源允许工作区内写操作，并可使用相关工具。",
+  };
 }
 
 export const ENGINE_OBSERVE_ACTIONS: readonly AdapterActionDefinition[] = [

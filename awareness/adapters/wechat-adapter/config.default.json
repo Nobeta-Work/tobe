@@ -1,16 +1,11 @@
 {
-  "enabled": false,
-  "autoStart": false,
+  "enabled": true,
+  "autoStart": true,
   "storageDir": "./data",
   "logLevel": "warn",
   "botAgent": "ToBe/wechat-adapter",
-  "identity": {
-    "ownerIds": []
-  },
   "receive": {
-    "messageTypes": ["text", "image", "voice"],
-    "allowUsers": [],
-    "denyUsers": []
+    "messageTypes": ["text", "image", "voice"]
   },
   "events": {
     "dedupeTtlMs": 3600000,

@@ -1,4 +1,9 @@
 export type Level = "off" | "low" | "medium" | "high" | "max";
+export interface PermissionDeclaration {
+  workspaceWrite: boolean;
+  allowedToolClasses: readonly ("response" | "retrieval_media" | "generative_media" | "channel" | "workspace")[];
+  instruction: string;
+}
 /**
  * Observation 的触发主体分类：
  * user=用户本人；assistant=ToBe；service=其他参与者构成的实际场景；
@@ -19,6 +24,8 @@ export interface Observation<TContent = unknown> {
   trust: Level;
   attention: Level;
   timestamp: number;
+  /** Engine 根据 trust 附加的本轮权限声明；Adapter 不得自行提升。 */
+  permissions?: PermissionDeclaration;
 }
 
 /** function calling 的写操作信封；call_id 由宿主 Tool Call 注入。 */

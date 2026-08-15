@@ -7,7 +7,7 @@ import type {
   Unsubscribe,
 } from "../../adapter.ts";
 import type { AdapterCallResult, Interaction, Level, Observation, ObserveRequest } from "../../type.ts";
-import { ParticipationClassifier } from "./classifier.ts";
+import { directlyAddressesBot, ParticipationClassifier } from "./classifier.ts";
 import { loadConfig, type IIroseConfig } from "./config.ts";
 import { eventId, type IIroseEvent } from "./protocol.ts";
 import { WelcomePlugin } from "./plugins/welcome.ts";
@@ -22,8 +22,15 @@ import { LocalResponseGuard } from "./local-response.ts";
 import { classifyIIroseActor } from "./actor.ts";
 import { MusicPlugin } from "./plugins/music.ts";
 import { requestMusic } from "./tools/music.ts";
+import { MonthlyMessageLog, type MessageLogEntry } from "./message-log.ts";
+import { ActivePlugin, type ActiveLevel } from "./plugins/active.ts";
+import { RoomPlugin } from "./plugins/room.ts";
+import { likeUser, switchRoom } from "./scripts/switch-room.ts";
+import { getMedia, mediaErrorResult, parseMediaInput } from "../../../media/index.ts";
+import type { MediaService, ResolvedMedia } from "../../../media/type.ts";
+import { uploadIIroseMedia } from "./scripts/upload-media.ts";
 
-export interface IIroseAdapterOptions { configPath?: string; config?: IIroseConfig }
+export interface IIroseAdapterOptions { configPath?: string; config?: IIroseConfig; mediaService?: MediaService }
 
 export class IIroseAdapter implements EnvAdapter {
   readonly id = randomUUID().replaceAll("-", "").slice(0, 10);
@@ -36,7 +43,11 @@ export class IIroseAdapter implements EnvAdapter {
   readonly #classifier: ParticipationClassifier;
   readonly #welcome: WelcomePlugin;
   readonly #music: MusicPlugin;
+  readonly #active: ActivePlugin;
+  readonly #room: RoomPlugin;
+  readonly #messageLog: MonthlyMessageLog;
   readonly #localResponses = new LocalResponseGuard();
+  readonly #mediaServiceOverride: MediaService | undefined;
   readonly #listeners = new Set<ObservationListener>();
   #health: AdapterHealth = { status: "stopped", since: Date.now() };
   #disposeListen: Unsubscribe | null = null;
@@ -49,9 +60,13 @@ export class IIroseAdapter implements EnvAdapter {
   constructor(options: IIroseAdapterOptions = {}) {
     this.#config = options.config ?? loadConfig(options.configPath);
     this.autoStart = this.#config.enabled && this.#config.autoStart;
-    this.#classifier = new ParticipationClassifier(this.#config.assessment);
+    this.#classifier = new ParticipationClassifier();
     this.#welcome = new WelcomePlugin(this.#config.plugins.welcome, this.#config.credentials.uid);
     this.#music = new MusicPlugin(this.#config);
+    this.#active = new ActivePlugin(this.#config.plugins.active);
+    this.#room = new RoomPlugin(this.#config.plugins.room);
+    this.#messageLog = new MonthlyMessageLog(this.#config.logging.directory);
+    this.#mediaServiceOverride = options.mediaService;
   }
 
   async start(): Promise<void> {
@@ -91,10 +106,21 @@ export class IIroseAdapter implements EnvAdapter {
       case "logs":
         return this.#result(request.call_id, request.action, {
           status: "success",
-          enabled: this.#config.logging.enabled,
-          implemented: false,
-          message: "Persistent logs are pending.",
+          enabled: true,
+          file: this.#messageLog.fileName(),
+          directory: "Adapter data/logs",
         });
+      case "history": {
+        const start = request.args.start;
+        const end = request.args.end;
+        if (typeof start !== "number" || typeof end !== "number") {
+          return this.#result(request.call_id, request.action, { status: "error", message: "history requires numeric start and end" });
+        }
+        const messages = await this.#messageLog.range(start, end);
+        return this.#result(request.call_id, request.action, {
+          status: "success", file: this.#messageLog.fileName(), start, end, messages,
+        });
+      }
       default:
         return this.#result(request.call_id, request.action, { status: "error", message: `Unsupported observe action: ${request.action}` });
     }
@@ -121,6 +147,20 @@ export class IIroseAdapter implements EnvAdapter {
             ...(await sendMessage(this.#client, this.#config, args)),
           });
         }
+        case "send_media": {
+          const service = this.#mediaServiceOverride ?? getMedia();
+          if (!service) throw new Error("Media capability is not loaded");
+          const resolved = await service.resolve(parseMediaInput(interaction.args.media), {
+            kinds: ["image", "audio"], maxBytes: this.#config.media.maxBytes,
+          });
+          const caption = interaction.args.caption;
+          if (caption !== undefined && typeof caption !== "string") throw new Error("caption must be a string");
+          const uploaded = await uploadIIroseMedia(this.#config, resolved);
+          const delivery = await this.#sendUploadedMedia(resolved, uploaded.url, caption?.trim());
+          return this.#result(interaction.call_id, interaction.action, {
+            status: "success", media: resolved.artifact, url: uploaded.url, delivery,
+          });
+        }
         case "request_music": {
           const name = interaction.args.name;
           if (typeof name !== "string" || !name.trim()) throw new Error("request_music requires a non-empty string name");
@@ -129,14 +169,42 @@ export class IIroseAdapter implements EnvAdapter {
             song: await requestMusic(this.#client, this.#config, name),
           });
         }
+        case "set_active": {
+          const level = this.#parseActiveLevel(interaction.args.level);
+          this.#active.setLevel(level);
+          return this.#result(interaction.call_id, interaction.action, { status: "success", level });
+        }
+        case "switch_room": {
+          const roomId = this.#requiredString(interaction.args.roomId, "roomId");
+          const password = interaction.args.password;
+          if (password !== undefined && typeof password !== "string") throw new Error("password must be a string");
+          await this.#switchRoom(roomId, password);
+          return this.#result(interaction.call_id, interaction.action, { status: "success", roomId });
+        }
+        case "set_follow": {
+          if (typeof interaction.args.follow !== "boolean") throw new Error("follow must be boolean");
+          this.#room.setFollow(interaction.args.follow);
+          return this.#result(interaction.call_id, interaction.action, { status: "success", follow: this.#room.follow });
+        }
+        case "like_user": {
+          const userId = this.#requiredString(interaction.args.userId, "userId");
+          const message = interaction.args.message;
+          if (message !== undefined && typeof message !== "string") throw new Error("message must be a string");
+          if (userId === this.#config.credentials.uid || this.#config.adminsIds.includes(userId)) {
+            throw new Error("like_user only accepts ordinary users");
+          }
+          await likeUser(this.#client, userId, message);
+          return this.#result(interaction.call_id, interaction.action, { status: "success", userId });
+        }
         default:
           throw new Error(`Unsupported IIROSE action: ${interaction.action}`);
       }
     } catch (error) {
-      return this.#result(interaction.call_id, interaction.action, {
-        status: "error",
-        message: error instanceof Error ? error.message : String(error),
-      });
+      const mediaError = mediaErrorResult(error);
+      return this.#result(interaction.call_id, interaction.action,
+        mediaError.code !== "MEDIA_INTERNAL_ERROR"
+          ? mediaError
+          : { status: "error", message: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -161,15 +229,50 @@ export class IIroseAdapter implements EnvAdapter {
     // 本地命令/插件发送结果的聊天室回显不属于新的环境感知。
     if (this.#localResponses.consume(event)) return;
 
+    if (event.type === "room.switch") {
+      if (event.targetRoomId && this.#room.shouldFollow(isAdmin)) await this.#switchRoom(event.targetRoomId);
+      return;
+    }
+
+    let history: MessageLogEntry[] = [];
+    let baseTrigger = isAdmin;
+    if (event.type === "message.public" || event.type === "message.private") {
+      const mentioned = directlyAddressesBot(
+        event.content, this.#config.credentials.username, this.#config.nickname, event.reply,
+      );
+      baseTrigger ||= mentioned;
+      await this.#messageLog.append({
+        receivedAt: Date.now(), timestamp: event.timestamp, source, eventType: event.type,
+        userId: event.userId, username: event.username, text: event.content,
+        ...(event.messageId ? { messageId: event.messageId } : {}),
+        ...(event.roomId ? { roomId: event.roomId } : {}),
+        isAdmin, mentioned, reply: event.reply === true,
+      });
+    }
+
     // 本地降级路由先于 trust 窗口和 Observation；命中后不影响 Engine 状态。
     if (event.type.startsWith("message.")) {
       const command = await runCommand(
         event.content,
         this.#config.commands.prefix,
-        this.#config.commands.whitelist,
+        [...new Set([...this.#config.commands.whitelist, "active", "room", "follow"])],
         {
-          status: () => `iirose-adapter: ${this.#health.status}`,
+          status: () => `iirose-adapter: ${this.#health.status}; active=${this.#active.level}; room=${this.#config.credentials.roomId}; follow=${this.#room.follow}`,
           pluginCommands: () => this.#pluginHelp(),
+          active: (level) => {
+            const parsed = this.#parseActiveLevel(level);
+            this.#active.setLevel(parsed);
+            return `主动响应等级已切换为 ${parsed}`;
+          },
+          room: async (roomId) => {
+            await this.#switchRoom(this.#requiredString(roomId, "roomId"));
+            return `已切换至房间 ${roomId}`;
+          },
+          follow: (value) => {
+            const parsed = this.#parseBoolean(value, "follow");
+            this.#room.setFollow(parsed);
+            return `跟随管理员切房已${parsed ? "开启" : "关闭"}`;
+          },
         },
       );
       if (command.handled) {
@@ -202,8 +305,13 @@ export class IIroseAdapter implements EnvAdapter {
       return;
     }
 
-    // 参与窗口使用本机接收时间，避免远端时间单位或伪造时间戳影响洪泛判断。
-    const levels = this.#classifier.assess(source, isAdmin, Date.now());
+    if (event.type !== "message.public" && event.type !== "message.private") return;
+    const isPrivate = event.type === "message.private";
+    const triggered = isPrivate ? isAdmin : this.#active.shouldTrigger(source, baseTrigger, Date.now());
+    if (!triggered) return;
+    history = await this.#messageLog.recent(10, source);
+    const levels = this.#classifier.assess(history, { triggered, private: isPrivate, isAdmin });
+    if (levels.attention === "off") return;
 
     const observation: Observation = {
       id: eventId(),
@@ -218,6 +326,8 @@ export class IIroseAdapter implements EnvAdapter {
         text: event.content,
         ...(event.roomId ? { roomId: event.roomId } : {}),
         ...(event.messageId ? { messageId: event.messageId } : {}),
+        history,
+        trigger: { direct: baseTrigger, activeLevel: this.#active.level },
         ...(this.#config.logging.includeRawFrames ? { rawFrame: event.raw } : {}),
       },
       trust: levels.trust,
@@ -235,6 +345,35 @@ export class IIroseAdapter implements EnvAdapter {
     catch (error) { this.#setHealth("degraded", error instanceof Error ? error.message : String(error)); }
   }
 
+  async #sendUploadedMedia(media: ResolvedMedia, url: string, caption?: string): Promise<"image" | "audio_card"> {
+    if (media.artifact.kind === "image") {
+      const content = `${caption ? `${caption}\n` : ""}[${url}#e]`;
+      await sendMessage(this.#client, this.#config, { content });
+      return "image";
+    }
+    if (media.artifact.kind !== "audio") throw new Error(`IIROSE cannot send ${media.artifact.kind} media`);
+    const title = caption || media.artifact.fileName || "音频";
+    const cover = this.#config.media.audioCoverUrl;
+    const messageId = `${Date.now()}`;
+    await this.#client.send(JSON.stringify({
+      m: `m__4@0>${this.#escapeEntity(title)}>ToBe>${cover}>${this.#config.profile.messageColor}>${this.#config.media.audioBitRate}`,
+      mc: this.#config.profile.messageColor, i: messageId,
+    }));
+    await this.#client.send(`&1${JSON.stringify({
+      s: this.#removeHttp(url), d: Math.ceil((media.artifact.durationMs ?? 0) / 1000),
+      c: this.#removeHttp(cover), n: title, r: "ToBe", b: "@0", o: "", l: "",
+    })}`);
+    return "audio_card";
+  }
+
+  #escapeEntity(value: string): string {
+    return value.replace(/[<>&"']/g, (character) => ({
+      "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;",
+    })[character] ?? character);
+  }
+
+  #removeHttp(url: string): string { return url.startsWith("http") ? url.slice(4) : url; }
+
   #pluginHelp(): readonly string[] {
     if (!this.#config.plugins.music.enabled) return [];
     const prefix = this.#config.plugins.music.commands.prefix === "{name}"
@@ -243,6 +382,28 @@ export class IIroseAdapter implements EnvAdapter {
     const whiteList = this.#config.plugins.music.commands.whiteList;
     const commands = typeof whiteList === "string" ? [whiteList] : whiteList;
     return commands.map((command) => `${prefix}${command}<歌名> — 点播音乐`);
+  }
+
+  async #switchRoom(roomId: string, password?: string): Promise<void> {
+    if (!this.#room.enabled) throw new Error("room plugin is disabled");
+    await switchRoom(this.#client, roomId, password);
+    this.#config.credentials.roomId = roomId;
+  }
+
+  #parseActiveLevel(value: unknown): ActiveLevel {
+    if (value === "off" || value === "low" || value === "medium" || value === "high") return value;
+    throw new Error("level must be off, low, medium, or high");
+  }
+
+  #parseBoolean(value: unknown, name: string): boolean {
+    if (value === true || value === "true") return true;
+    if (value === false || value === "false") return false;
+    throw new Error(`${name} must be true or false`);
+  }
+
+  #requiredString(value: unknown, name: string): string {
+    if (typeof value !== "string" || !value.trim()) throw new Error(`${name} must be a non-empty string`);
+    return value.trim();
   }
 
   async #emitLifecycle(type: "adapter.started" | "adapter.stopped", content: string): Promise<void> {

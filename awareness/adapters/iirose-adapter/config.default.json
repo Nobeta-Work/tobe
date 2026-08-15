@@ -24,18 +24,21 @@
     "reconnectMaxDelayMs": 300000,
     "maxReconnectAttempts": 0
   },
-  "assessment": {
-    "windowMs": 60000,
-    "floodWindowMs": 5000,
-    "floodThreshold": 12,
-    "maxEventsPerWindow": 200
-  },
   "commands": {
     "prefix": "/",
     "adminOnly": true,
-    "whitelist": ["help", "ping", "status"]
+    "whitelist": ["help", "ping", "status", "active", "room", "follow"]
   },
   "plugins": {
+    "active": {
+      "level": "off",
+      "longWindowMs": 600000,
+      "shortWindowMs": 120000
+    },
+    "room": {
+      "enabled": true,
+      "follow": false
+    },
     "welcome": {
       "enabled": true,
       "template": " [*{name}*] 欢迎来到房间～",
@@ -59,8 +62,15 @@
       "color": "000000"
     }
   },
+  "media": {
+    "uploadEndpoint": "https://f.iirose.com/lib/php/system/file_upload.php",
+    "publicBaseUrl": "http://r.iirose.com/",
+    "timeoutMs": 30000,
+    "maxBytes": 20000000,
+    "audioCoverUrl": "http://r.iirose.com/i/26/3/6/4/5918-8B.png",
+    "audioBitRate": 320
+  },
   "logging": {
-    "enabled": false,
     "directory": "data/logs",
     "includeRawFrames": false
   }

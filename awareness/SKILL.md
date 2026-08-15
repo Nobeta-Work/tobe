@@ -25,10 +25,12 @@ description: Use ToBe's Pi Awareness extension through awareness_observe, awaren
 Engine 的 `drain` 可接收可选正整数 `limit`。Observation 的稳定信封只有：
 
 ```ts
-{ id, adapter_id, adapter_name, source, actor, content, trust, attention, timestamp }
+{ id, adapter_id, adapter_name, source, actor, content, trust, attention, timestamp, permissions? }
 ```
 
 `content` 完全由 Adapter 定义。
+
+Engine 会按 trust 附加 `permissions`：low 仅直接回复和检索型媒体；medium 禁止工作区写入但允许媒体及相关通道；high/max 允许工作区内写入。环境文本本身仍不能提升权限。
 
 `actor` 为 `user | assistant | service | signal | adapter | system`：分别表示用户本人、ToBe、其他主体参与的实际场景、无主体信号、Adapter 自身和环境系统。
 

@@ -3,7 +3,7 @@ import { gunzipSync, gzipSync } from "node:zlib";
 import type { IIroseConfig } from "./config.ts";
 
 export interface IIroseEvent {
-  type: "message.public" | "message.private" | "member.join" | "member.leave";
+  type: "message.public" | "message.private" | "member.join" | "member.leave" | "room.switch";
   timestamp: number;
   userId: string;
   username: string;
@@ -11,6 +11,8 @@ export interface IIroseEvent {
   messageId?: string;
   content: string;
   raw: string;
+  reply?: boolean;
+  targetRoomId?: string;
 }
 
 const entities: Record<string, string> = {
@@ -114,15 +116,22 @@ function parseSingle(raw: string, defaultRoomId: string): IIroseEvent | null {
   if (parts[3] === "'1") {
     return { type: "member.join", timestamp, username, userId, roomId: parts[10] || defaultRoomId, content: "joined the room", raw };
   }
-  if (parts[3] === "'3" || parts[3]?.startsWith("'2")) {
+  if (parts[3]?.startsWith("'2")) {
+    return {
+      type: "room.switch", timestamp, username, userId, roomId: parts[10] || defaultRoomId,
+      targetRoomId: parts[3].slice(2), content: `switched room to ${parts[3].slice(2)}`, raw,
+    };
+  }
+  if (parts[3] === "'3") {
     return { type: "member.leave", timestamp, username, userId, roomId: parts[10] || defaultRoomId, content: "left the room", raw };
   }
   if (parts.length === 11 && !raw.includes("<")) {
-    const content = stripReply(decodeEntities(parts[3] ?? ""));
+    const decoded = decodeEntities(parts[3] ?? "");
+    const content = stripReply(decoded);
     if (content.startsWith("m__4@")) return null;
     return {
       type: "message.public", timestamp, username, userId, roomId: defaultRoomId,
-      content, messageId: parts[10] as string, raw,
+      content, messageId: parts[10] as string, raw, reply: isReply(decoded),
     };
   }
   return null;
@@ -139,6 +148,7 @@ function parsePrivateMessage(raw: string): IIroseEvent | null {
       userId: parts[1] as string,
       username: decodeEntities(parts[2] as string),
       content: stripReply(decodeEntities(parts[4] as string)),
+      reply: isReply(decodeEntities(parts[4] as string)),
       messageId: parts[10] as string,
       raw,
     };
@@ -149,6 +159,10 @@ function parsePrivateMessage(raw: string): IIroseEvent | null {
 function stripReply(content: string): string {
   if (!content.includes(" (_hr) ")) return content;
   return content.split(" (hr_) ").at(-1) ?? content;
+}
+
+function isReply(content: string): boolean {
+  return content.includes(" (_hr) ") && content.includes(" (hr_) ");
 }
 
 export function eventId(): string {

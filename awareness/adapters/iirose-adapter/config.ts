@@ -3,6 +3,8 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveAdapterDataPath } from "../../adapter-data.ts";
 import { ensureAdapterConfig } from "../../config-file.ts";
+import type { ActivePluginConfig } from "./plugins/active.ts";
+import type { RoomPluginConfig } from "./plugins/room.ts";
 
 export interface IIroseConfig {
   enabled: boolean;
@@ -27,18 +29,14 @@ export interface IIroseConfig {
     reconnectMaxDelayMs: number;
     maxReconnectAttempts: number;
   };
-  assessment: {
-    windowMs: number;
-    floodWindowMs: number;
-    floodThreshold: number;
-    maxEventsPerWindow: number;
-  };
   commands: {
     prefix: string;
     adminOnly: boolean;
     whitelist: string[];
   };
   plugins: {
+    active: ActivePluginConfig;
+    room: RoomPluginConfig;
     welcome: {
       enabled: boolean;
       template: string;
@@ -58,7 +56,15 @@ export interface IIroseConfig {
       color: string;
     };
   };
-  logging: { enabled: boolean; directory: string; includeRawFrames: boolean };
+  media: {
+    uploadEndpoint: string;
+    publicBaseUrl: string;
+    timeoutMs: number;
+    maxBytes: number;
+    audioCoverUrl: string;
+    audioBitRate: number;
+  };
+  logging: { directory: string; includeRawFrames: boolean };
 }
 
 export interface PluginCommandsConfig {
@@ -74,9 +80,28 @@ const ADAPTER_DIR = dirname(DEFAULT_CONFIG_PATH);
 export function loadConfig(path?: string): IIroseConfig {
   const configPath = path ?? ensureAdapterConfig(DEFAULT_CONFIG_PATH, TEMPLATE_CONFIG_PATH);
   const value = JSON.parse(readFileSync(configPath, "utf8")) as unknown;
+  applyBackwardCompatibleDefaults(value);
   assertConfig(value);
   value.logging.directory = resolveAdapterDataPath(ADAPTER_DIR, value.logging.directory, "data/logs");
   return value;
+}
+
+function applyBackwardCompatibleDefaults(value: unknown): void {
+  if (!value || typeof value !== "object") return;
+  const config = value as Record<string, unknown>;
+  const plugins = config.plugins && typeof config.plugins === "object"
+    ? config.plugins as Record<string, unknown>
+    : (config.plugins = {}) as Record<string, unknown>;
+  plugins.active ??= { level: "off", longWindowMs: 600_000, shortWindowMs: 120_000 };
+  plugins.room ??= { enabled: true, follow: false };
+  config.media ??= {
+    uploadEndpoint: "https://f.iirose.com/lib/php/system/file_upload.php",
+    publicBaseUrl: "http://r.iirose.com/",
+    timeoutMs: 30_000,
+    maxBytes: 20_000_000,
+    audioCoverUrl: "http://r.iirose.com/i/26/3/6/4/5918-8B.png",
+    audioBitRate: 320,
+  };
 }
 
 function assertConfig(value: unknown): asserts value is IIroseConfig {
@@ -84,9 +109,11 @@ function assertConfig(value: unknown): asserts value is IIroseConfig {
   const config = value as Record<string, unknown>;
   const credentials = config.credentials as Record<string, unknown> | undefined;
   const connection = config.connection as Record<string, unknown> | undefined;
-  const assessment = config.assessment as Record<string, unknown> | undefined;
   const plugins = config.plugins as Record<string, unknown> | undefined;
   const music = plugins?.music as Record<string, unknown> | undefined;
+  const active = plugins?.active as Record<string, unknown> | undefined;
+  const room = plugins?.room as Record<string, unknown> | undefined;
+  const media = config.media as Record<string, unknown> | undefined;
   if (typeof config.enabled !== "boolean" || typeof config.autoStart !== "boolean") {
     throw new Error("config.enabled and config.autoStart must be boolean");
   }
@@ -103,10 +130,21 @@ function assertConfig(value: unknown): asserts value is IIroseConfig {
   for (const key of ["loginTimeoutMs", "heartbeatIntervalMs", "reconnectInitialDelayMs", "reconnectMaxDelayMs", "maxReconnectAttempts"]) {
     if (!Number.isFinite(connection?.[key])) throw new Error(`connection.${key} must be a number`);
   }
-  for (const key of ["windowMs", "floodWindowMs", "floodThreshold", "maxEventsPerWindow"]) {
-    if (!Number.isFinite(assessment?.[key])) throw new Error(`assessment.${key} must be a number`);
-  }
   if (!music || typeof music.enabled !== "boolean") throw new Error("plugins.music.enabled must be boolean");
+  if (!active || !["off", "low", "medium", "high"].includes(String(active.level))
+    || !Number.isFinite(active.longWindowMs) || !Number.isFinite(active.shortWindowMs)) {
+    throw new Error("plugins.active is invalid");
+  }
+  if (!room || typeof room.enabled !== "boolean" || typeof room.follow !== "boolean") {
+    throw new Error("plugins.room is invalid");
+  }
+  if (!media || typeof media.uploadEndpoint !== "string" || !media.uploadEndpoint.startsWith("https://")
+    || typeof media.publicBaseUrl !== "string" || !/^https?:\/\//.test(media.publicBaseUrl)
+    || !Number.isFinite(media.timeoutMs) || !Number.isFinite(media.maxBytes)
+    || typeof media.audioCoverUrl !== "string" || !/^https?:\/\//.test(media.audioCoverUrl)
+    || !Number.isFinite(media.audioBitRate)) {
+    throw new Error("media upload configuration is invalid");
+  }
   assertPluginCommands(music.commands, "plugins.music.commands");
   for (const key of ["searchEndpoint", "streamEndpoint"]) {
     if (typeof music[key] !== "string" || !String(music[key]).startsWith("https://")) {

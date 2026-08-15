@@ -18,12 +18,21 @@
       "reconnect": { "type": "boolean", "title": "自动重连" }, "reconnectInitialDelayMs": { "type": "integer", "title": "初始重连延迟 ms" },
       "reconnectMaxDelayMs": { "type": "integer", "title": "最大重连延迟 ms" }, "maxReconnectAttempts": { "type": "integer", "title": "最大重试次数" }
     }},
-    "assessment": { "type": "object", "title": "流量评估", "properties": {
-      "windowMs": { "type": "integer", "title": "窗口 ms" }, "floodWindowMs": { "type": "integer", "title": "洪泛窗口 ms" },
-      "floodThreshold": { "type": "integer", "title": "洪泛阈值" }, "maxEventsPerWindow": { "type": "integer", "title": "窗口事件上限" }
-    }},
     "commands": { "type": "object", "title": "命令", "properties": { "prefix": { "type": "string", "title": "前缀" }, "adminOnly": { "type": "boolean", "title": "仅管理员" }, "whitelist": { "type": "array", "title": "命令白名单", "items": { "type": "string" } }}},
-    "plugins": { "type": "object", "title": "插件", "additionalProperties": true },
-    "logging": { "type": "object", "title": "日志", "properties": { "enabled": { "type": "boolean", "title": "启用" }, "directory": { "type": "string", "title": "目录" }, "includeRawFrames": { "type": "boolean", "title": "包含原始帧" } }}
+    "plugins": { "type": "object", "title": "插件", "additionalProperties": true, "properties": {
+      "active": { "type": "object", "title": "主动响应", "properties": {
+        "level": { "type": "string", "title": "等级", "enum": ["off", "low", "medium", "high"] },
+        "longWindowMs": { "type": "integer", "title": "长窗口 ms" }, "shortWindowMs": { "type": "integer", "title": "短窗口 ms" }
+      }},
+      "room": { "type": "object", "title": "切房", "properties": {
+        "enabled": { "type": "boolean", "title": "启用" }, "follow": { "type": "boolean", "title": "跟随管理员" }
+      }}
+    }},
+    "media": { "type": "object", "title": "媒体上传", "properties": {
+      "uploadEndpoint": { "type": "string", "title": "官方上传地址" }, "publicBaseUrl": { "type": "string", "title": "媒体 URL 前缀" },
+      "timeoutMs": { "type": "integer", "title": "上传超时 ms" }, "maxBytes": { "type": "integer", "title": "上传大小上限" },
+      "audioCoverUrl": { "type": "string", "title": "音频默认封面" }, "audioBitRate": { "type": "integer", "title": "音频卡片码率" }
+    }},
+    "logging": { "type": "object", "title": "日志", "properties": { "directory": { "type": "string", "title": "目录" }, "includeRawFrames": { "type": "boolean", "title": "包含原始帧" } }}
   }
 }

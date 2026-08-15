@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Media 配置",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["enabled", "dataDir", "libDir", "maxInputBytes", "maxGeneratedBytes", "providers"],
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "title": "启用 Media"
+    },
+    "dataDir": {
+      "type": "string",
+      "minLength": 1,
+      "title": "生成媒体目录",
+      "description": "相对路径以 media 目录为基准。"
+    },
+    "libDir": {
+      "type": "string",
+      "minLength": 1,
+      "title": "媒体库目录",
+      "description": "相对路径以 media 目录为基准。"
+    },
+    "maxInputBytes": {
+      "type": "integer",
+      "minimum": 1,
+      "title": "最大输入字节数"
+    },
+    "maxGeneratedBytes": {
+      "type": "integer",
+      "minimum": 1,
+      "title": "最大生成字节数"
+    },
+    "providers": {
+      "type": "object",
+      "title": "媒体 Providers",
+      "additionalProperties": false,
+      "required": ["imageRecognition", "audioRecognition", "imageGeneration", "audioGeneration"],
+      "properties": {
+        "imageRecognition": {
+          "type": "object",
+          "title": "图片识别",
+          "additionalProperties": false,
+          "required": ["enabled", "baseUrl", "endpoint", "apiKeyEnv", "model", "timeoutMs"],
+          "properties": {
+            "enabled": { "type": "boolean", "title": "启用图片识别" },
+            "baseUrl": { "type": "string", "title": "Base URL" },
+            "endpoint": { "type": "string", "minLength": 1, "title": "Endpoint" },
+            "apiKeyEnv": { "type": "string", "title": "API Key 环境变量" },
+            "model": { "type": "string", "title": "Model" },
+            "timeoutMs": { "type": "integer", "minimum": 1, "title": "超时毫秒数" }
+          }
+        },
+        "audioRecognition": {
+          "type": "object",
+          "title": "音频识别",
+          "additionalProperties": false,
+          "required": ["enabled", "baseUrl", "endpoint", "apiKeyEnv", "model", "timeoutMs"],
+          "properties": {
+            "enabled": { "type": "boolean", "title": "启用音频识别" },
+            "baseUrl": { "type": "string", "title": "Base URL" },
+            "endpoint": { "type": "string", "minLength": 1, "title": "Endpoint" },
+            "apiKeyEnv": { "type": "string", "title": "API Key 环境变量" },
+            "model": { "type": "string", "title": "Model" },
+            "timeoutMs": { "type": "integer", "minimum": 1, "title": "超时毫秒数" }
+          }
+        },
+        "imageGeneration": {
+          "type": "object",
+          "title": "图片生成",
+          "additionalProperties": false,
+          "required": ["enabled", "baseUrl", "endpoint", "apiKeyEnv", "model", "timeoutMs", "responseFormat", "downloadHosts"],
+          "properties": {
+            "enabled": { "type": "boolean", "title": "启用图片生成" },
+            "baseUrl": { "type": "string", "title": "Base URL" },
+            "endpoint": { "type": "string", "minLength": 1, "title": "Endpoint" },
+            "apiKeyEnv": { "type": "string", "title": "API Key 环境变量" },
+            "model": { "type": "string", "title": "Model" },
+            "timeoutMs": { "type": "integer", "minimum": 1, "title": "超时毫秒数" },
+            "responseFormat": { "type": "string", "enum": ["b64_json", "url"], "title": "响应格式" },
+            "downloadHosts": {
+              "type": "array",
+              "title": "允许下载的主机",
+              "description": "填写返回图片 URL 时允许访问的额外主机名。",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "audioGeneration": {
+          "type": "object",
+          "title": "音频生成",
+          "additionalProperties": false,
+          "required": ["enabled", "baseUrl", "endpoint", "apiKeyEnv", "model", "timeoutMs", "voice", "responseFormat"],
+          "properties": {
+            "enabled": { "type": "boolean", "title": "启用音频生成" },
+            "baseUrl": { "type": "string", "title": "Base URL" },
+            "endpoint": { "type": "string", "minLength": 1, "title": "Endpoint" },
+            "apiKeyEnv": { "type": "string", "title": "API Key 环境变量" },
+            "model": { "type": "string", "title": "Model" },
+            "timeoutMs": { "type": "integer", "minimum": 1, "title": "超时毫秒数" },
+            "voice": { "type": "string", "minLength": 1, "title": "Voice" },
+            "responseFormat": { "type": "string", "minLength": 1, "title": "响应格式" }
+          }
+        }
+      }
+    }
+  }
+}

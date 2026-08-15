@@ -5,8 +5,10 @@ import { extname, join, normalize } from "node:path";
 import { AgentHost } from "./agent/host.ts";
 import { hashPassword, loadWebConfig, saveWebConfig, type WebConfig } from "./lib/config.ts";
 import { PUBLIC_DIR } from "./lib/paths.ts";
+import { HttpError } from "./lib/schema-config.ts";
 import { AccessControl, isValidIpRule } from "./lib/security.ts";
-import { getAdapter, HttpError, listAdapters, saveAdapter } from "./modules/awareness.ts";
+import { getAdapter, listAdapters, saveAdapter } from "./modules/awareness.ts";
+import { getMediaConfig, saveMediaConfig } from "./modules/media.ts";
 import { listMemory, readMemory, saveMemory } from "./modules/memory.ts";
 
 let config = await loadWebConfig();
@@ -150,6 +152,9 @@ async function handleApi(request: IncomingMessage, response: ServerResponse, url
   const adapterMatch = /^\/api\/adapters\/([a-z0-9-]+)$/.exec(url.pathname);
   if (adapterMatch?.[1] && request.method === "GET") { json(response, 200, await getAdapter(adapterMatch[1])); return; }
   if (adapterMatch?.[1] && request.method === "PUT") { json(response, 200, await saveAdapter(adapterMatch[1], await readJson(request))); return; }
+
+  if (url.pathname === "/api/media" && request.method === "GET") { json(response, 200, await getMediaConfig()); return; }
+  if (url.pathname === "/api/media" && request.method === "PUT") { json(response, 200, await saveMediaConfig(await readJson(request))); return; }
 
   if (request.method === "GET" && url.pathname === "/api/memory") { json(response, 200, { entries: await listMemory() }); return; }
   const memoryMatch = /^\/api\/memory\/(.+)$/.exec(url.pathname);

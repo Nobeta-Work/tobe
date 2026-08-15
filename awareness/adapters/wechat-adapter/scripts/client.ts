@@ -1,5 +1,6 @@
 import type { WeChatConfig } from "../config.ts";
 import type { WeChatIncomingMessage } from "../protocol.ts";
+import { WECHAT_PUBLIC_USER_ID } from "../protocol.ts";
 import { detectMimeType } from "../../../../media/files/mime.ts";
 import type { MediaData, ResolvedMedia } from "../../../../media/type.ts";
 
@@ -28,13 +29,14 @@ export interface WeChatGateway {
   sendMedia?(userId: string, media: ResolvedMedia, caption?: string): Promise<void>;
   replyMedia?(message: WeChatIncomingMessage, media: ResolvedMedia, caption?: string): Promise<void>;
   sendTyping(userId: string): Promise<void>;
+  rememberUser?(nativeUserId: string): Promise<void>;
 }
 
 type WeChatSendContent = string | { image: Buffer; caption?: string } | { video: Buffer; caption?: string } | { file: Buffer; fileName: string; caption?: string };
 interface WeChatDownloadedMedia { data: Buffer; type: "image" | "file" | "video" | "voice"; fileName?: string; format?: string }
 
 interface SdkBot {
-  storage: { has(key: string): Promise<boolean> };
+  storage: { has(key: string): Promise<boolean>; get<T>(key: string): Promise<T | undefined>; set<T>(key: string, value: T): Promise<void> };
   login(options?: { force?: boolean; callbacks?: LoginCallbacks }): Promise<WeChatCredentials>;
   start(): Promise<void>;
   stop(): void;
@@ -87,7 +89,7 @@ export class SdkWeChatGateway implements WeChatGateway {
   }
 
   isRunning(): boolean { return this.#bot?.isRunning ?? false; }
-  async sendText(userId: string, content: string): Promise<void> { await (await this.#getBot()).send(userId, content); }
+  async sendText(userId: string, content: string): Promise<void> { const bot = await this.#getBot(); await bot.send(await this.#resolveUserId(bot, userId), content); }
   async replyText(message: WeChatIncomingMessage, content: string): Promise<void> { await (await this.#getBot()).reply(message, content); }
   async downloadMedia(message: WeChatIncomingMessage): Promise<MediaData | null> {
     const media = await (await this.#getBot()).download(message);
@@ -101,12 +103,14 @@ export class SdkWeChatGateway implements WeChatGateway {
     return { kind, mimeType, data: media.data, ...(media.fileName ? { fileName: media.fileName } : {}) };
   }
   async sendMedia(userId: string, media: ResolvedMedia, caption?: string): Promise<void> {
-    await (await this.#getBot()).send(userId, toSendContent(media, caption));
+    const bot = await this.#getBot();
+    await bot.send(await this.#resolveUserId(bot, userId), toSendContent(media, caption));
   }
   async replyMedia(message: WeChatIncomingMessage, media: ResolvedMedia, caption?: string): Promise<void> {
     await (await this.#getBot()).reply(message, toSendContent(media, caption));
   }
-  async sendTyping(userId: string): Promise<void> { await (await this.#getBot()).sendTyping(userId); }
+  async sendTyping(userId: string): Promise<void> { const bot = await this.#getBot(); await bot.sendTyping(await this.#resolveUserId(bot, userId)); }
+  async rememberUser(nativeUserId: string): Promise<void> { await (await this.#getBot()).storage.set("adapter_user_0", nativeUserId); }
 
   async #getBot(): Promise<SdkBot> {
     if (this.#bot) return this.#bot;
@@ -127,10 +131,20 @@ export class SdkWeChatGateway implements WeChatGateway {
   }
 
   #wireEvents(bot: SdkBot): void {
-    bot.onMessage((message) => this.#events?.onMessage(message));
+    bot.onMessage(async (message) => {
+      await this.rememberUser(message.userId);
+      await this.#events?.onMessage(message);
+    });
     bot.on("session:expired", () => this.#events?.onSessionExpired());
     bot.on("session:restored", (credentials: WeChatCredentials) => this.#events?.onSessionRestored(credentials));
     bot.on("error", (error: unknown) => this.#events?.onError(error));
+  }
+
+  async #resolveUserId(bot: SdkBot, publicUserId: string): Promise<string> {
+    if (publicUserId !== WECHAT_PUBLIC_USER_ID) throw new Error(`WeChat userId must be ${WECHAT_PUBLIC_USER_ID}`);
+    const nativeUserId = await bot.storage.get<string>("adapter_user_0");
+    if (!nativeUserId) throw new Error("WeChat user 0 has no established conversation yet");
+    return nativeUserId;
   }
 }
 
@@ -138,5 +152,9 @@ function toSendContent(media: ResolvedMedia, caption?: string): Exclude<WeChatSe
   const data = Buffer.from(media.data);
   if (media.artifact.kind === "image") return { image: data, ...(caption ? { caption } : {}) };
   if (media.artifact.kind === "video") return { video: data, ...(caption ? { caption } : {}) };
-  return { file: data, fileName: media.artifact.fileName ?? `media-${media.artifact.id}`, ...(caption ? { caption } : {}) };
+  return { file: data, fileName: media.artifact.fileName ?? `media-${media.artifact.id}${extensionForMime(media.artifact.mimeType)}`, ...(caption ? { caption } : {}) };
+}
+
+function extensionForMime(mimeType: string): string {
+  return ({ "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/ogg": ".ogg", "audio/mp4": ".m4a" } as Record<string, string>)[mimeType] ?? ".bin";
 }

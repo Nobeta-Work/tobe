@@ -7,8 +7,7 @@
     "enabled": { "type": "boolean", "title": "启用" }, "autoStart": { "type": "boolean", "title": "随 Agent 启动" },
     "storageDir": { "type": "string", "title": "数据目录" }, "logLevel": { "type": "string", "title": "日志级别", "enum": ["debug", "info", "warn", "error"] },
     "botAgent": { "type": "string", "title": "Bot Agent" },
-    "identity": { "type": "object", "title": "身份", "properties": { "ownerIds": { "type": "array", "title": "所有者 ID", "items": { "type": "string" } }}},
-    "receive": { "type": "object", "title": "接收规则", "properties": { "messageTypes": { "type": "array", "title": "消息类型", "items": { "type": "string" } }, "allowUsers": { "type": "array", "title": "允许用户", "items": { "type": "string" } }, "denyUsers": { "type": "array", "title": "拒绝用户", "items": { "type": "string" } } }},
+    "receive": { "type": "object", "title": "接收规则", "properties": { "messageTypes": { "type": "array", "title": "消息类型", "items": { "type": "string", "enum": ["text", "image", "voice"] } } }},
     "events": { "type": "object", "title": "事件缓存", "properties": { "dedupeTtlMs": { "type": "integer", "title": "去重 TTL ms" }, "messageCacheTtlMs": { "type": "integer", "title": "消息缓存 TTL ms" }, "maxCachedMessages": { "type": "integer", "title": "缓存消息上限" } }}
   }
 }

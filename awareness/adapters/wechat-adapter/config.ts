@@ -12,8 +12,7 @@ export interface WeChatConfig {
   storageDir: string;
   logLevel: WeChatLogLevel;
   botAgent: string;
-  identity: { ownerIds: string[] };
-  receive: { messageTypes: string[]; allowUsers: string[]; denyUsers: string[] };
+  receive: { messageTypes: string[] };
   events: { dedupeTtlMs: number; messageCacheTtlMs: number; maxCachedMessages: number };
 }
 
@@ -26,8 +25,7 @@ const DEFAULTS: WeChatConfig = {
   storageDir: resolve(ADAPTER_DIR, "data"),
   logLevel: "warn",
   botAgent: "ToBe/wechat-adapter",
-  identity: { ownerIds: [] },
-  receive: { messageTypes: ["text", "image", "voice"], allowUsers: [], denyUsers: [] },
+  receive: { messageTypes: ["text", "image", "voice"] },
   events: { dedupeTtlMs: 3_600_000, messageCacheTtlMs: 3_600_000, maxCachedMessages: 500 },
 };
 
@@ -39,7 +37,6 @@ export function loadConfig(path?: string): WeChatConfig {
     ...DEFAULTS,
     ...raw,
     storageDir: resolveAdapterDataPath(ADAPTER_DIR, configuredStorage, "data"),
-    identity: { ...DEFAULTS.identity, ...raw.identity },
     receive: { ...DEFAULTS.receive, ...raw.receive },
     events: { ...DEFAULTS.events, ...raw.events },
   };
@@ -51,7 +48,7 @@ function assertConfig(config: WeChatConfig): void {
   if (typeof config.enabled !== "boolean" || typeof config.autoStart !== "boolean") throw new Error("enabled and autoStart must be boolean");
   if (!config.storageDir.trim()) throw new Error("storageDir is required");
   if (!(["debug", "info", "warn", "error", "silent"] as string[]).includes(config.logLevel)) throw new Error("logLevel is invalid");
-  for (const [name, value] of Object.entries({ ownerIds: config.identity.ownerIds, messageTypes: config.receive.messageTypes, allowUsers: config.receive.allowUsers, denyUsers: config.receive.denyUsers })) {
+  for (const [name, value] of Object.entries({ messageTypes: config.receive.messageTypes })) {
     if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) throw new Error(`${name} must be a string array`);
   }
   for (const key of ["dedupeTtlMs", "messageCacheTtlMs", "maxCachedMessages"] as const) {
