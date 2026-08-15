@@ -1,11 +1,10 @@
-import type { MediaApiConfig, MediaConfig } from "./config.ts";
-import { MediaError } from "./errors.ts";
-import { detectMimeType, extensionForMime } from "./mime.ts";
-import type { GeneratedMedia, MediaData, MediaGenerateRequest, MediaKind, MediaModelProvider } from "./type.ts";
+import type { MediaApiConfig, MediaConfig } from "../config.ts";
+import { detectMimeType, extensionForMime } from "../files/mime.ts";
+import { MediaError, type GeneratedMedia, type MediaData, type MediaGenerateRequest, type MediaKind, type MediaModels } from "../type.ts";
 
 type Fetch = typeof fetch;
 
-export class HttpMediaModelProvider implements MediaModelProvider {
+export class HttpMediaModels implements MediaModels {
   readonly id = "http-media-model";
   readonly #config: MediaConfig;
   readonly #fetch: Fetch;
@@ -15,12 +14,12 @@ export class HttpMediaModelProvider implements MediaModelProvider {
     this.#fetch = fetchImplementation;
   }
 
-  supportsRecognition(kind: MediaKind): boolean {
+  canRecognize(kind: MediaKind): boolean {
     return kind === "image" ? this.#config.providers.imageRecognition.enabled
       : kind === "audio" ? this.#config.providers.audioRecognition.enabled : false;
   }
 
-  supportsGeneration(kind: MediaKind): boolean {
+  canGenerate(kind: MediaKind): boolean {
     return kind === "image" ? this.#config.providers.imageGeneration.enabled
       : kind === "audio" ? this.#config.providers.audioGeneration.enabled : false;
   }
@@ -99,6 +98,9 @@ export class HttpMediaModelProvider implements MediaModelProvider {
       if (!url) throw new MediaError("MEDIA_PROVIDER_FAILED", "Image generation response did not contain image data");
       const parsed = new URL(url);
       if (parsed.protocol !== "https:") throw new MediaError("MEDIA_PROVIDER_FAILED", "Generated image URL must use HTTPS");
+      const apiHost = new URL(config.baseUrl).hostname.toLowerCase();
+      const allowedHosts = new Set([apiHost, ...(config.downloadHosts ?? []).map((host) => host.toLowerCase())]);
+      if (!allowedHosts.has(parsed.hostname.toLowerCase())) throw new MediaError("MEDIA_PROVIDER_FAILED", `Generated image host is not allowed: ${parsed.hostname}`);
       const download = await this.#fetch(parsed, { signal: combinedSignal(signal, config.timeoutMs) });
       if (!download.ok) throw new MediaError("MEDIA_PROVIDER_FAILED", `Generated image download failed: HTTP ${download.status}`);
       data = await readLimitedBytes(download, this.#config.maxGeneratedBytes);

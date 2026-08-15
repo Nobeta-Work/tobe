@@ -12,6 +12,7 @@ awareness/adapters/*/data/
 # Instance-owned Media configuration, libraries and generated cache
 media/config.json
 media/data/
+media/lib/
 
 # Evolving Memory state
 memory/IDENTITY.md

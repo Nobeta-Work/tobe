@@ -16,7 +16,7 @@ function mediaInputSchema() {
   return {
     oneOf: [
       { type: "object", required: ["source", "mediaId"], properties: { source: { const: "artifact" }, mediaId: { type: "string" } }, additionalProperties: false },
-      { type: "object", required: ["source", "library", "category"], properties: { source: { const: "library" }, library: { type: "string" }, category: { type: "string" }, selection: { enum: ["random", "best"] }, revision: { type: "string" } }, additionalProperties: false },
+      { type: "object", required: ["source", "kind", "category", "tag"], properties: { source: { const: "library" }, kind: { enum: ["image", "audio", "video", "file"] }, category: { type: "string" }, tag: { type: "string" }, selection: { enum: ["random", "best"] } }, additionalProperties: false },
     ],
   };
 }

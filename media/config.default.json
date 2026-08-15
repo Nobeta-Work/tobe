@@ -1,13 +1,9 @@
 {
   "enabled": true,
   "dataDir": "./data",
-  "artifactTtlMs": 86400000,
+  "libDir": "./lib",
   "maxInputBytes": 20971520,
   "maxGeneratedBytes": 20971520,
-  "libraries": {
-    "stickers": { "path": "./data/library/stickers", "kinds": ["image"] },
-    "audio": { "path": "./data/library/audio", "kinds": ["audio"] }
-  },
   "providers": {
     "imageRecognition": {
       "enabled": false,
@@ -32,7 +28,8 @@
       "apiKeyEnv": "TOBE_MEDIA_IMAGE_GENERATION_KEY",
       "model": "",
       "timeoutMs": 120000,
-      "responseFormat": "b64_json"
+      "responseFormat": "b64_json",
+      "downloadHosts": []
     },
     "audioGeneration": {
       "enabled": false,

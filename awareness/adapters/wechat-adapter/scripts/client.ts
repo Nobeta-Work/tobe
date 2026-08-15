@@ -1,5 +1,6 @@
 import type { WeChatConfig } from "../config.ts";
 import type { WeChatIncomingMessage } from "../protocol.ts";
+import { detectMimeType } from "../../../../media/files/mime.ts";
 import type { MediaData, ResolvedMedia } from "../../../../media/type.ts";
 
 export interface WeChatCredentials { accountId: string; userId: string; savedAt?: string }
@@ -92,9 +93,10 @@ export class SdkWeChatGateway implements WeChatGateway {
     const media = await (await this.#getBot()).download(message);
     if (!media) return null;
     const kind = media.type === "voice" ? "audio" : media.type;
+    const detected = detectMimeType(media.data, media.fileName);
     const mimeType = media.type === "voice"
       ? media.format === "wav" ? "audio/wav" : "audio/silk"
-      : media.type === "image" ? imageMime(media.fileName)
+      : media.type === "image" && detected.kind === "image" ? detected.mimeType
       : media.type === "video" ? "video/mp4" : "application/octet-stream";
     return { kind, mimeType, data: media.data, ...(media.fileName ? { fileName: media.fileName } : {}) };
   }
@@ -137,12 +139,4 @@ function toSendContent(media: ResolvedMedia, caption?: string): Exclude<WeChatSe
   if (media.artifact.kind === "image") return { image: data, ...(caption ? { caption } : {}) };
   if (media.artifact.kind === "video") return { video: data, ...(caption ? { caption } : {}) };
   return { file: data, fileName: media.artifact.fileName ?? `media-${media.artifact.id}`, ...(caption ? { caption } : {}) };
-}
-
-function imageMime(fileName?: string): string {
-  const lower = fileName?.toLowerCase() ?? "";
-  if (lower.endsWith(".png")) return "image/png";
-  if (lower.endsWith(".gif")) return "image/gif";
-  if (lower.endsWith(".webp")) return "image/webp";
-  return "image/jpeg";
 }

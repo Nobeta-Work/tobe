@@ -1,7 +1,6 @@
 import { constants, copyFileSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { MediaKind } from "./type.ts";
 
 export interface MediaApiConfig {
   enabled: boolean;
@@ -12,15 +11,15 @@ export interface MediaApiConfig {
   timeoutMs: number;
   voice?: string;
   responseFormat?: string;
+  downloadHosts?: string[];
 }
 
 export interface MediaConfig {
   enabled: boolean;
   dataDir: string;
-  artifactTtlMs: number;
+  libDir: string;
   maxInputBytes: number;
   maxGeneratedBytes: number;
-  libraries: Record<string, { path: string; kinds: MediaKind[] }>;
   providers: {
     imageRecognition: MediaApiConfig;
     audioRecognition: MediaApiConfig;
@@ -39,10 +38,7 @@ export function loadMediaConfig(path = DEFAULT_CONFIG_PATH): MediaConfig {
   const baseDir = dirname(path);
   const template = JSON.parse(readFileSync(TEMPLATE_CONFIG_PATH, "utf8")) as MediaConfig;
   const dataDir = resolvePath(baseDir, raw.dataDir ?? template.dataDir);
-  const libraries = Object.fromEntries(Object.entries(raw.libraries ?? template.libraries).map(([name, library]) => [name, {
-    path: resolvePath(baseDir, library.path),
-    kinds: library.kinds,
-  }]));
+  const libDir = resolvePath(baseDir, raw.libDir ?? template.libDir);
   const providers = {
     imageRecognition: { ...template.providers.imageRecognition, ...raw.providers?.imageRecognition },
     audioRecognition: { ...template.providers.audioRecognition, ...raw.providers?.audioRecognition },
@@ -52,10 +48,9 @@ export function loadMediaConfig(path = DEFAULT_CONFIG_PATH): MediaConfig {
   const config: MediaConfig = {
     enabled: raw.enabled ?? template.enabled,
     dataDir,
-    artifactTtlMs: raw.artifactTtlMs ?? template.artifactTtlMs,
+    libDir,
     maxInputBytes: raw.maxInputBytes ?? template.maxInputBytes,
     maxGeneratedBytes: raw.maxGeneratedBytes ?? template.maxGeneratedBytes,
-    libraries,
     providers,
   };
   validate(config);
@@ -71,15 +66,14 @@ function ensureConfig(path: string, template: string): void {
 
 function validate(config: MediaConfig): void {
   if (typeof config.enabled !== "boolean") throw new Error("media.enabled must be boolean");
-  for (const [name, value] of Object.entries({ artifactTtlMs: config.artifactTtlMs, maxInputBytes: config.maxInputBytes, maxGeneratedBytes: config.maxGeneratedBytes })) {
+  for (const [name, value] of Object.entries({ maxInputBytes: config.maxInputBytes, maxGeneratedBytes: config.maxGeneratedBytes })) {
     if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`media.${name} must be a positive safe integer`);
   }
-  for (const [name, library] of Object.entries(config.libraries)) {
-    if (!/^[a-z0-9][a-z0-9_-]*$/i.test(name)) throw new Error(`Invalid media library name: ${name}`);
-    if (!library.path || !Array.isArray(library.kinds) || !library.kinds.length) throw new Error(`Invalid media library: ${name}`);
-  }
+  if (!config.dataDir) throw new Error("media.dataDir must not be empty");
+  if (!config.libDir) throw new Error("media.libDir must not be empty");
   for (const [name, provider] of Object.entries(config.providers)) {
     if (!Number.isSafeInteger(provider.timeoutMs) || provider.timeoutMs <= 0) throw new Error(`providers.${name}.timeoutMs must be positive`);
     if (provider.enabled && (!provider.baseUrl || !provider.model)) throw new Error(`providers.${name} requires baseUrl and model when enabled`);
+    if (provider.downloadHosts && provider.downloadHosts.some((host) => typeof host !== "string" || !host.trim())) throw new Error(`providers.${name}.downloadHosts must contain hostnames`);
   }
 }

@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { mediaErrorResult } from "./errors.ts";
-import type { MediaKind, MediaService } from "./type.ts";
+import { mediaErrorResult } from "../media.ts";
+import type { MediaService } from "../type.ts";
 
 const MEDIA_KINDS = ["image", "audio", "video", "file"] as const;
 
@@ -9,23 +9,19 @@ export function registerMediaTools(pi: ExtensionAPI, service: MediaService): voi
   pi.registerTool({
     name: "media_list",
     label: "Media List",
-    description: "List the currently available categories in configured local media libraries before asking an Adapter to send library media.",
+    description: "List the current category/tag choices for one media kind before asking an Adapter to send library media.",
     promptSnippet: "Inspect the current local image and audio media choices",
     promptGuidelines: [
-      "Call media_list before sending retrieval-based media; never invent a library or category.",
-      "After choosing a returned category, call the target Adapter interact action with source=library.",
+      "Call media_list before sending retrieval-based media; never invent a category or tag.",
+      "After choosing a returned category and tag, call the target Adapter interact action with source=library and the same kind.",
     ],
     parameters: Type.Object({
-      library: Type.Optional(Type.String({ minLength: 1 })),
-      kind: Type.Optional(Type.Union(MEDIA_KINDS.map((kind) => Type.Literal(kind)))),
+      kind: Type.Union(MEDIA_KINDS.map((kind) => Type.Literal(kind))),
     }, { additionalProperties: false }),
     async execute(_toolCallId, params) {
       try {
-        const libraries = await service.list({
-          ...(params.library ? { library: params.library } : {}),
-          ...(params.kind ? { kind: params.kind as MediaKind } : {}),
-        });
-        return textResult({ status: "success", libraries });
+        const library = await service.list({ kind: params.kind });
+        return textResult({ status: "success", ...library });
       } catch (error) { return textResult(mediaErrorResult(error)); }
     },
   });
@@ -33,7 +29,7 @@ export function registerMediaTools(pi: ExtensionAPI, service: MediaService): voi
   pi.registerTool({
     name: "media_generate",
     label: "Media Generate",
-    description: "Generate an image or audio artifact with Media's independently configured model API and return a mediaId for an Adapter interaction.",
+    description: "Generate an image or audio artifact with Media's independently configured model API and return its kind-prefixed key for an Adapter interaction.",
     promptSnippet: "Generate image or audio media before sending it through an Adapter",
     promptGuidelines: [
       "Generation and delivery are separate operations: only call an Adapter after media_generate succeeds.",
@@ -55,7 +51,7 @@ export function registerMediaTools(pi: ExtensionAPI, service: MediaService): voi
   pi.registerTool({
     name: "media_inspect",
     label: "Media Inspect",
-    description: "Inspect a generated Media artifact by its opaque mediaId without exposing binary data or local paths.",
+    description: "Inspect generated Media by its kind-prefixed key without exposing binary data, local paths, or its filename description.",
     promptSnippet: "Check a generated media artifact before delivery",
     parameters: Type.Object({ mediaId: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
     async execute(_toolCallId, params) {

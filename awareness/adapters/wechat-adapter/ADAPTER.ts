@@ -1,9 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { capabilities } from "../../../runtime/capabilities.ts";
-import { mediaErrorResult } from "../../../media/errors.ts";
-import { parseMediaInput } from "../../../media/input.ts";
-import { MEDIA_CAPABILITY, type MediaData, type MediaService } from "../../../media/type.ts";
+import { getMedia, mediaErrorResult, parseMediaInput } from "../../../media/index.ts";
+import type { MediaData, MediaService } from "../../../media/type.ts";
 import type { AdapterHealth, EnvAdapter, ObservationListener, Unsubscribe } from "../../adapter.ts";
 import type { Actor, AdapterCallResult, Interaction, Level, Observation, ObserveRequest } from "../../type.ts";
 import { loadConfig, type WeChatConfig } from "./config.ts";
@@ -198,7 +196,7 @@ export class WeChatAdapter implements EnvAdapter {
     }
   }
 
-  #mediaService(): MediaService | undefined { return this.#mediaServiceOverride ?? capabilities.consume<MediaService>(MEDIA_CAPABILITY); }
+  #mediaService(): MediaService | undefined { return this.#mediaServiceOverride ?? getMedia(); }
   #requireMediaService(): MediaService {
     const service = this.#mediaService();
     if (!service) throw new Error("Media capability is not loaded");

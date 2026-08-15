@@ -29,10 +29,13 @@ flowchart LR
     end
     A[[Agent]]
     M[(Memory)]
+    Media[(Media)]
 
     Env -->|感知| AAdap --> Env
     AEng --> A -->|交互| AEng
     A <-->|沉淀| M
+    A <-->|检索 / 生成| Media
+    AAdap <-->|识别 / 解析| Media
     AAdap ~~~|过滤转换| AEng
 
     style Env fill:#e8e8e8,stroke:#9e9e9e,color:#333
@@ -41,6 +44,7 @@ flowchart LR
     style AEng fill:#90caf9,stroke:#1565c0,color:#0d47a1
     style A fill:#ffb74d,stroke:#f57c00,color:#4e2e00
     style M fill:#a5d6a7,stroke:#388e3c,color:#1b5e20
+    style Media fill:#ce93d8,stroke:#8e24aa,color:#4a148c
 
 ```
 
@@ -95,10 +99,13 @@ Adapter 配置、各 Adapter 的 `data/`、Memory 的实例认知、Dream 和自
 
 ## Media
 
-提供文本与媒体的相互转换功能，将文本与媒体（图片、音频）区分，核心大模型只负责基于文本的思考。
-Media 模块与 Awareness.Adapter 联动激发 Agent 的多模态能力。
+Media 是与 Awareness、Memory 平级的双向媒体能力，当前规范化图片与音频，并为未来的视频与文件保留扩展类型。它独立配置图片识别、语音识别、图片生成和语音生成模型 API。
 
-该扩展支持生成型媒体，并通过本地数据作为缓存的方案提供检索型媒体。
+- 入站：环境原生媒体由 Adapter 下载、解密并转为 Media 标准数据；Media 生成文本解释；Adapter 将明确的媒体类型与解释一起交给 Agent，避免把媒体和普通文本事件混淆。
+- 检索出站：Agent 先按媒体类型调用 `media_list` 获取当前 category/tag，再调用 Adapter；Adapter 以 `kind/category/tag` 向 Media 申请符合平台约束的媒体并发送。
+- 生成出站：Agent 先调用 `media_generate` 得到不透明媒体键，再调用 Adapter；Adapter 解析媒体键并转为平台数据发送。
+
+默认 Agent 仍基于文本思考。Adapter 可以自行承诺把原生多模态内容直接传给支持它的模型，但 Media 不要求所有 Agent 或 Adapter 具备该能力。
 
 ## Plan (Pending)
 

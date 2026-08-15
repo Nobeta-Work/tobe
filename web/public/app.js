@@ -156,7 +156,7 @@ function renderMetrics() {
   const context = stats.contextUsage;
   document.querySelector("#metric-context").textContent = context?.contextWindow
     ? `窗口 ${formatTokens(context.tokens)} / ${formatTokens(context.contextWindow)} · ${numberOrDash(context.percent)}%`
-    : "窗口 —";
+    : "窗口 -";
   document.querySelector("#metric-cost").textContent = Number.isFinite(stats.cost) ? `$${stats.cost.toFixed(4)}` : "$0.00";
 }
 
@@ -584,13 +584,13 @@ function setPath(root, path, value) {
 }
 
 function formatTokens(value) {
-  if (!Number.isFinite(value)) return "—";
+  if (!Number.isFinite(value)) return "-";
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}m`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1)}k`;
   return String(value);
 }
 
-function numberOrDash(value) { return Number.isFinite(value) ? Math.round(value) : "—"; }
+function numberOrDash(value) { return Number.isFinite(value) ? Math.round(value) : "-"; }
 function safeJson(value) { try { return JSON.stringify(value, null, 2); } catch { return String(value ?? ""); } }
 function element(tag, className = "", text = "") { const node = document.createElement(tag); if (className) node.className = className; if (text !== "") node.textContent = text; return node; }
 function escapeText(value) { const node = document.createElement("span"); node.textContent = value; return node.innerHTML; }

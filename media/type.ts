@@ -22,19 +22,16 @@ export interface MediaArtifact {
   width?: number;
   height?: number;
   durationMs?: number;
-  description?: string;
-  createdAt: number;
-  expiresAt?: number;
   origin: {
     type: "generated" | "library" | "imported";
     provider?: string;
-    library?: string;
     category?: string;
+    tag?: string;
   };
 }
 
 export interface MediaRecognition {
-  media: Omit<MediaArtifact, "id" | "createdAt" | "expiresAt" | "origin"> & {
+  media: Omit<MediaArtifact, "id" | "origin"> & {
     origin: { type: "imported" };
   };
   text: string;
@@ -43,10 +40,10 @@ export interface MediaRecognition {
 
 export interface MediaLibraryInput {
   source: "library";
-  library: string;
+  kind: MediaKind;
   category: string;
+  tag: string;
   selection?: "random" | "best";
-  revision?: string;
 }
 
 export interface MediaArtifactInput {
@@ -70,20 +67,12 @@ export interface ResolvedMedia {
 }
 
 export interface MediaListRequest {
-  library?: string;
-  kind?: MediaKind;
-}
-
-export interface MediaLibraryCategory {
-  name: string;
-  count: number;
-  kinds: MediaKind[];
+  kind: MediaKind;
 }
 
 export interface MediaLibraryIndex {
-  library: string;
-  revision: string;
-  categories: MediaLibraryCategory[];
+  kind: MediaKind;
+  categories: Record<string, string[]>;
 }
 
 export interface MediaGenerateRequest {
@@ -97,27 +86,40 @@ export interface GeneratedMedia extends MediaData {
   description?: string;
 }
 
-export interface MediaModelProvider {
+export interface MediaModels {
   readonly id: string;
   recognize(input: MediaData, signal?: AbortSignal): Promise<string>;
   generate(request: MediaGenerateRequest, signal?: AbortSignal): Promise<GeneratedMedia>;
-  supportsRecognition(kind: MediaKind): boolean;
-  supportsGeneration(kind: MediaKind): boolean;
+  canRecognize(kind: MediaKind): boolean;
+  canGenerate(kind: MediaKind): boolean;
 }
 
 export interface MediaServiceStatus {
   recognition: Record<RecognizableMediaKind, boolean>;
   generation: Record<GeneratableMediaKind, boolean>;
-  libraries: string[];
+  libraryKinds: MediaKind[];
 }
 
 export interface MediaService {
   status(): Promise<MediaServiceStatus>;
-  list(request?: MediaListRequest): Promise<MediaLibraryIndex[]>;
+  list(request: MediaListRequest): Promise<MediaLibraryIndex>;
   recognize(input: MediaData, signal?: AbortSignal): Promise<MediaRecognition>;
   generate(request: MediaGenerateRequest, signal?: AbortSignal): Promise<MediaArtifact>;
   resolve(input: MediaInput, constraints?: MediaConstraints): Promise<ResolvedMedia>;
   inspect(mediaId: string): Promise<MediaArtifact | undefined>;
 }
 
-export const MEDIA_CAPABILITY = "tobe.media.v1";
+export type MediaErrorCode =
+  | "MEDIA_INVALID_REQUEST"
+  | "MEDIA_NOT_FOUND"
+  | "MEDIA_TOO_LARGE"
+  | "MEDIA_UNSUPPORTED"
+  | "MEDIA_PROVIDER_UNAVAILABLE"
+  | "MEDIA_PROVIDER_FAILED";
+
+export class MediaError extends Error {
+  constructor(readonly code: MediaErrorCode, message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "MediaError";
+  }
+}
