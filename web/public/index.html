@@ -7,19 +7,19 @@
   <title>ToBe</title>
   <link rel="icon" type="image/webp" href="https://nobeta.cn/i/2026/08/13/bba032.webp">
   <link rel="apple-touch-icon" href="https://nobeta.cn/i/2026/08/13/bba032.webp">
-  <link rel="stylesheet" href="/style.css?v=1">
+  <link rel="stylesheet" href="/style.css?v=2">
 </head>
 <body>
   <div id="login" class="login-shell" hidden>
     <form id="login-form" class="login-panel">
       <img class="brand-mark" src="https://nobeta.cn/i/2026/08/13/bba032.webp" alt="ToBe">
-      <p class="kicker">ToBe Control</p>
-      <h1>访问长期会话</h1>
-      <p class="muted">输入部署时设置的访问密码。</p>
+      <p class="eyebrow">TOBE WEB</p>
+      <h1>返回长期会话</h1>
+      <p class="muted">输入此部署的访问密码。</p>
       <label for="login-password">访问密码</label>
       <input id="login-password" name="password" type="password" autocomplete="current-password" required autofocus>
       <p id="login-error" class="inline-error" role="alert"></p>
-      <button class="primary" type="submit">进入</button>
+      <button class="primary" type="submit">进入 ToBe</button>
     </form>
   </div>
 
@@ -27,23 +27,23 @@
     <aside class="sidebar">
       <div class="brand-row">
         <img class="brand-mark" src="https://nobeta.cn/i/2026/08/13/bba032.webp" alt="ToBe">
-        <div><strong>ToBe</strong><span>长期主体控制台</span></div>
+        <div><strong>ToBe</strong><span>one persistent self</span></div>
       </div>
       <nav class="nav" aria-label="主导航">
-        <button class="nav-item active" data-view="chat">会话</button>
-        <button class="nav-item" data-view="adapters">Adapters</button>
-        <button class="nav-item" data-view="memory">Memory</button>
-        <button class="nav-item" data-view="access">访问控制</button>
+        <button class="nav-item active" data-view="chat"><span class="nav-icon">◌</span><span>会话</span></button>
+        <button class="nav-item" data-view="adapters"><span class="nav-icon">⌁</span><span>Adapters</span></button>
+        <button class="nav-item" data-view="memory"><span class="nav-icon">◇</span><span>Memory</span></button>
       </nav>
-      <div class="sidebar-foot">
+      <div class="sidebar-bottom">
         <div class="status-line"><span id="status-dot" class="status-dot"></span><span id="status-label">正在连接</span></div>
-        <button id="logout" class="text-button" hidden>退出访问</button>
+        <button class="nav-item settings-link" data-view="settings"><span class="nav-icon">⚙</span><span>设置</span></button>
+        <button id="logout" class="quiet-action" hidden>退出访问</button>
       </div>
     </aside>
 
     <main class="workspace">
       <header class="topbar">
-        <div><p id="view-kicker" class="kicker">SESSION TOBE</p><h1 id="view-title">长期会话</h1></div>
+        <div><p id="view-kicker" class="eyebrow">SESSION / TOBE</p><h1 id="view-title">长期会话</h1></div>
         <div id="agent-controls" class="button-row">
           <button id="agent-toggle" class="agent-action start">运行 Agent</button>
           <button id="agent-abort" class="secondary" hidden>中止生成</button>
@@ -51,57 +51,69 @@
       </header>
 
       <section id="view-chat" class="view active">
+        <div id="extension-widget" class="extension-widget" hidden></div>
         <div id="messages" class="messages" aria-live="polite">
-          <div class="empty-state"><h2>会话正在恢复</h2><p>固定 Session 名称为 tobe。消息载入后会出现在这里。</p></div>
+          <div class="empty-state"><span class="empty-glyph">◌</span><h2>会话正在恢复</h2><p>固定 Session 名称为 tobe。</p></div>
         </div>
         <form id="composer" class="composer">
           <label class="sr-only" for="prompt">发送消息</label>
-          <textarea id="prompt" rows="2" placeholder="向 ToBe 发送消息。Enter 发送，Shift+Enter 换行。"></textarea>
-          <button class="primary" type="submit">发送</button>
+          <textarea id="prompt" rows="2" placeholder="向 ToBe 发送消息，也可以直接输入 /command"></textarea>
+          <button class="primary send-button" type="submit">发送 <span>↗</span></button>
         </form>
+        <div class="session-bar" aria-label="会话状态">
+          <span id="metric-model">未选择模型</span>
+          <span id="metric-state">已停止</span>
+          <span id="metric-tokens">0 tokens</span>
+          <span id="metric-context">窗口 —</span>
+          <span id="metric-cost">$0.00</span>
+        </div>
       </section>
 
       <section id="view-adapters" class="view split-view">
-        <div class="index-pane"><div class="pane-heading"><h2>Adapters</h2><p>保存配置不会自动重载运行中的实例。</p></div><div id="adapter-list" class="item-list"></div></div>
-        <div id="adapter-editor" class="editor-pane"><div class="empty-state"><h2>选择 Adapter</h2><p>配置由 schema 声明，敏感字段不会回传到浏览器。</p></div></div>
+        <div class="index-pane"><div class="pane-heading"><p class="eyebrow">AWARENESS</p><h2>Adapters</h2><p>配置写入文件；运行中的实例不会热重载。</p></div><div id="adapter-list" class="item-list"></div></div>
+        <div id="adapter-editor" class="editor-pane"><div class="empty-state"><span class="empty-glyph">⌁</span><h2>选择 Adapter</h2><p>配置由各 Adapter 的 schema 声明，敏感值不会回传。</p></div></div>
       </section>
 
       <section id="view-memory" class="view split-view">
-        <div class="index-pane"><div class="pane-heading"><h2>Memory</h2><p>BASE 仅审查，实例记忆和 Skills 可以修改。</p></div><div id="memory-list" class="item-list"></div></div>
-        <div id="memory-editor" class="editor-pane"><div class="empty-state"><h2>选择记忆文件</h2><p>使用纯文本编辑，不渲染 Markdown。</p></div></div>
+        <div class="index-pane"><div class="pane-heading"><p class="eyebrow">PERSISTENT COGNITION</p><h2>Memory</h2><p>审查和编辑长期主体的文本记忆。</p></div><div id="memory-list" class="item-list"></div></div>
+        <div id="memory-editor" class="editor-pane"><div class="empty-state"><span class="empty-glyph">◇</span><h2>选择记忆文件</h2><p>使用纯文本编辑，不渲染 Markdown。</p></div></div>
       </section>
 
-      <section id="view-access" class="view access-view">
-        <form id="access-form" class="access-form">
-          <div class="access-heading">
-            <h2>访问控制</h2>
-            <p>设置会立即写入 web/config.json 并应用到后续请求。</p>
-          </div>
-          <fieldset class="field-group">
-            <legend>密码访问</legend>
-            <label class="check-row"><input id="password-enabled" type="checkbox">要求输入访问密码</label>
-            <div id="password-field" class="field full">
-              <label for="access-password">新密码</label>
-              <input id="access-password" type="password" autocomplete="new-password" placeholder="留空则保持当前密码">
-              <p class="field-help">首次启用时必须填写。关闭开关会删除已保存的密码哈希。</p>
+      <section id="view-settings" class="view settings-view">
+        <form id="settings-form" class="settings-form">
+          <div class="settings-heading"><p class="eyebrow">TOBE WEB</p><h2>设置</h2><p>访问规则立即生效；Provider 在下一次运行 Agent 时生效。</p></div>
+          <fieldset class="setting-card">
+            <div class="setting-card-head"><div><h3>自定义 API Provider</h3><p>连接 OpenAI Chat Completions 兼容接口。</p></div><label class="switch"><input id="provider-enabled" type="checkbox"><span></span></label></div>
+            <div id="provider-fields" class="field-grid">
+              <div class="field full"><label for="provider-base-url">Base URL</label><input id="provider-base-url" type="url" placeholder="https://api.example.com（可省略 /v1）"></div>
+              <div class="field"><label for="provider-key">API Key</label><input id="provider-key" type="password" autocomplete="off" placeholder="未设置"></div>
+              <div class="field"><label for="provider-model">Model</label><input id="provider-model" type="text" placeholder="model-id"></div>
             </div>
           </fieldset>
-          <fieldset class="field-group">
-            <legend>IP 白名单</legend>
-            <div class="field full">
-              <label for="allowed-ips">允许访问的 IP 或 CIDR</label>
-              <textarea id="allowed-ips" rows="8" placeholder="203.0.113.8&#10;10.10.0.0/16"></textarea>
-              <p class="field-help">每行一个地址。列表为空时允许任意 IP 访问。</p>
-            </div>
-            <p class="current-ip">当前请求 IP：<code id="current-ip">未知</code></p>
+          <fieldset class="setting-card">
+            <div class="setting-card-head"><div><h3>密码访问</h3><p>关闭时任何通过白名单的访问者都可以进入。</p></div><label class="switch"><input id="password-enabled" type="checkbox"><span></span></label></div>
+            <div id="password-field" class="field full"><label for="access-password">新密码</label><input id="access-password" type="password" autocomplete="new-password" placeholder="留空则保持当前密码"></div>
           </fieldset>
-          <div class="editor-actions"><button class="primary" type="submit">保存访问控制</button></div>
+          <fieldset class="setting-card">
+            <div class="setting-card-head"><div><h3>IP 白名单</h3><p>每行一个 IP 或 CIDR；留空允许任意地址。</p></div><code id="current-ip">未知</code></div>
+            <div class="field full"><label for="allowed-ips">允许访问的地址</label><textarea id="allowed-ips" rows="7" placeholder="203.0.113.8&#10;10.10.0.0/16"></textarea></div>
+          </fieldset>
+          <div class="settings-actions"><button class="primary" type="submit">保存设置</button></div>
         </form>
       </section>
     </main>
   </div>
 
+  <dialog id="rpc-dialog" class="rpc-dialog">
+    <form id="rpc-dialog-form">
+      <p class="eyebrow">AGENT REQUEST</p>
+      <h2 id="rpc-dialog-title">需要你的输入</h2>
+      <p id="rpc-dialog-message" class="muted"></p>
+      <div id="rpc-dialog-control"></div>
+      <div class="dialog-actions"><button id="rpc-dialog-cancel" class="secondary" type="button">取消</button><button class="primary" type="submit">确认</button></div>
+    </form>
+  </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script type="module" src="/app.js?v=1"></script>
+  <script type="module" src="/app.js?v=2"></script>
 </body>
 </html>

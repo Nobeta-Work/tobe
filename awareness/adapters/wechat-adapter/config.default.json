@@ -8,7 +8,7 @@
     "ownerIds": []
   },
   "receive": {
-    "messageTypes": ["text"],
+    "messageTypes": ["text", "image", "voice"],
     "allowUsers": [],
     "denyUsers": []
   },

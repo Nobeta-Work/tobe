@@ -1,5 +1,6 @@
 import type { WeChatConfig } from "../config.ts";
 import type { WeChatIncomingMessage } from "../protocol.ts";
+import type { MediaData, ResolvedMedia } from "../../../../media/type.ts";
 
 export interface WeChatCredentials { accountId: string; userId: string; savedAt?: string }
 export interface LoginCallbacks {
@@ -22,8 +23,14 @@ export interface WeChatGateway {
   isRunning(): boolean;
   sendText(userId: string, content: string): Promise<void>;
   replyText(message: WeChatIncomingMessage, content: string): Promise<void>;
+  downloadMedia?(message: WeChatIncomingMessage): Promise<MediaData | null>;
+  sendMedia?(userId: string, media: ResolvedMedia, caption?: string): Promise<void>;
+  replyMedia?(message: WeChatIncomingMessage, media: ResolvedMedia, caption?: string): Promise<void>;
   sendTyping(userId: string): Promise<void>;
 }
+
+type WeChatSendContent = string | { image: Buffer; caption?: string } | { video: Buffer; caption?: string } | { file: Buffer; fileName: string; caption?: string };
+interface WeChatDownloadedMedia { data: Buffer; type: "image" | "file" | "video" | "voice"; fileName?: string; format?: string }
 
 interface SdkBot {
   storage: { has(key: string): Promise<boolean> };
@@ -33,8 +40,9 @@ interface SdkBot {
   isRunning: boolean;
   onMessage(handler: (message: WeChatIncomingMessage) => void | Promise<void>): unknown;
   on(event: string, handler: (...args: any[]) => void | Promise<void>): unknown;
-  send(userId: string, content: string): Promise<void>;
-  reply(message: WeChatIncomingMessage, content: string): Promise<void>;
+  send(userId: string, content: WeChatSendContent): Promise<void>;
+  reply(message: WeChatIncomingMessage, content: WeChatSendContent): Promise<void>;
+  download(message: WeChatIncomingMessage): Promise<WeChatDownloadedMedia | null>;
   sendTyping(userId: string): Promise<void>;
 }
 
@@ -80,6 +88,22 @@ export class SdkWeChatGateway implements WeChatGateway {
   isRunning(): boolean { return this.#bot?.isRunning ?? false; }
   async sendText(userId: string, content: string): Promise<void> { await (await this.#getBot()).send(userId, content); }
   async replyText(message: WeChatIncomingMessage, content: string): Promise<void> { await (await this.#getBot()).reply(message, content); }
+  async downloadMedia(message: WeChatIncomingMessage): Promise<MediaData | null> {
+    const media = await (await this.#getBot()).download(message);
+    if (!media) return null;
+    const kind = media.type === "voice" ? "audio" : media.type;
+    const mimeType = media.type === "voice"
+      ? media.format === "wav" ? "audio/wav" : "audio/silk"
+      : media.type === "image" ? imageMime(media.fileName)
+      : media.type === "video" ? "video/mp4" : "application/octet-stream";
+    return { kind, mimeType, data: media.data, ...(media.fileName ? { fileName: media.fileName } : {}) };
+  }
+  async sendMedia(userId: string, media: ResolvedMedia, caption?: string): Promise<void> {
+    await (await this.#getBot()).send(userId, toSendContent(media, caption));
+  }
+  async replyMedia(message: WeChatIncomingMessage, media: ResolvedMedia, caption?: string): Promise<void> {
+    await (await this.#getBot()).reply(message, toSendContent(media, caption));
+  }
   async sendTyping(userId: string): Promise<void> { await (await this.#getBot()).sendTyping(userId); }
 
   async #getBot(): Promise<SdkBot> {
@@ -106,4 +130,19 @@ export class SdkWeChatGateway implements WeChatGateway {
     bot.on("session:restored", (credentials: WeChatCredentials) => this.#events?.onSessionRestored(credentials));
     bot.on("error", (error: unknown) => this.#events?.onError(error));
   }
+}
+
+function toSendContent(media: ResolvedMedia, caption?: string): Exclude<WeChatSendContent, string> {
+  const data = Buffer.from(media.data);
+  if (media.artifact.kind === "image") return { image: data, ...(caption ? { caption } : {}) };
+  if (media.artifact.kind === "video") return { video: data, ...(caption ? { caption } : {}) };
+  return { file: data, fileName: media.artifact.fileName ?? `media-${media.artifact.id}`, ...(caption ? { caption } : {}) };
+}
+
+function imageMime(fileName?: string): string {
+  const lower = fileName?.toLowerCase() ?? "";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
 }

@@ -9,6 +9,10 @@ tests/
 awareness/adapters/*/config.json
 awareness/adapters/*/data/
 
+# Instance-owned Media configuration, libraries and generated cache
+media/config.json
+media/data/
+
 # Evolving Memory state
 memory/IDENTITY.md
 memory/view/SELF.md

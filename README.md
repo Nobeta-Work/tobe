@@ -93,6 +93,13 @@ Adapter 配置、各 Adapter 的 `data/`、Memory 的实例认知、Dream 和自
 
 > 默认提供的 Adapters: `iirose-dapter`、`feishu-adapter`、`wechat-adapter`
 
+## Media
+
+提供文本与媒体的相互转换功能，将文本与媒体（图片、音频）区分，核心大模型只负责基于文本的思考。
+Media 模块与 Awareness.Adapter 联动激发 Agent 的多模态能力。
+
+该扩展支持生成型媒体，并通过本地数据作为缓存的方案提供检索型媒体。
+
 ## Plan (Pending)
 
 > Great Pi! It intentionally does not include build-in plan mode.

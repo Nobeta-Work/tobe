@@ -2,7 +2,8 @@ import { EventEmitter } from "node:events";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { REPO_DIR, SESSION_DIR } from "../lib/paths.ts";
+import { CUSTOM_PROVIDER_EXTENSION_PATH, REPO_DIR, RPC_COMMANDS_EXTENSION_PATH, SESSION_DIR } from "../lib/paths.ts";
+import type { CustomProviderConfig } from "../lib/config.ts";
 import { findNamedSession } from "./sessions.ts";
 
 const SESSION_NAME = "tobe";
@@ -22,6 +23,8 @@ export interface AgentSnapshot {
   desiredRunning: boolean;
   state: Record<string, unknown> | null;
   error: string | null;
+  stats: Record<string, unknown> | null;
+  commands: unknown[];
 }
 
 export class AgentHost extends EventEmitter {
@@ -30,14 +33,27 @@ export class AgentHost extends EventEmitter {
   private desiredRunning = false;
   private lastState: Record<string, unknown> | null = null;
   private lastError: string | null = null;
+  private lastStats: Record<string, unknown> | null = null;
+  private lastCommands: unknown[] = [];
   private sequence = 0;
   private restartAttempt = 0;
   private restartTimer: NodeJS.Timeout | null = null;
   private stdoutBuffer = "";
   private readonly pending = new Map<string, { resolve: (value: RpcResponse) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
 
+  constructor(private readonly getCustomProvider: () => CustomProviderConfig) {
+    super();
+  }
+
   snapshot(): AgentSnapshot {
-    return { processState: this.processState, desiredRunning: this.desiredRunning, state: this.lastState, error: this.lastError };
+    return {
+      processState: this.processState,
+      desiredRunning: this.desiredRunning,
+      state: this.lastState,
+      error: this.lastError,
+      stats: this.lastStats,
+      commands: this.lastCommands,
+    };
   }
 
   async start(): Promise<AgentSnapshot> {
@@ -86,6 +102,24 @@ export class AgentHost extends EventEmitter {
     return data?.messages ?? [];
   }
 
+  respondToUi(response: Record<string, unknown>): void {
+    const child = this.child;
+    if (!child || !child.stdin.writable) throw new Error("Agent 尚未启动");
+    if (typeof response.id !== "string" || !response.id) throw new Error("缺少交互请求 ID");
+    child.stdin.write(`${JSON.stringify({ type: "extension_ui_response", ...response })}\n`);
+  }
+
+  async refreshMetrics(): Promise<AgentSnapshot> {
+    if (!this.child) return this.snapshot();
+    const stats = await this.command({ type: "get_session_stats" });
+    this.lastStats = (stats.data ?? null) as Record<string, unknown> | null;
+    const commands = await this.command({ type: "get_commands" });
+    const data = commands.data as { commands?: unknown[] } | unknown[] | undefined;
+    this.lastCommands = Array.isArray(data) ? data : data?.commands ?? [];
+    this.broadcast("agent.state", this.snapshot());
+    return this.snapshot();
+  }
+
   async refreshState(): Promise<AgentSnapshot> {
     if (!this.child) return this.snapshot();
     const response = await this.command({ type: "get_state" });
@@ -104,6 +138,14 @@ export class AgentHost extends EventEmitter {
     const cli = join(REPO_DIR, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
     const args = [cli, "--mode", "rpc", "--session-dir", SESSION_DIR, "--no-extensions"];
     for (const extension of await declaredExtensions()) args.push("--extension", extension);
+    args.push("--extension", RPC_COMMANDS_EXTENSION_PATH);
+    const customProvider = this.getCustomProvider();
+    if (customProvider.enabled) {
+      if (!customProvider.baseUrl || !customProvider.apiKey || !customProvider.model) {
+        throw new Error("自定义 Provider 配置不完整，请在设置中填写 Base URL、Key 和 Model");
+      }
+      args.push("--extension", CUSTOM_PROVIDER_EXTENSION_PATH, "--provider", "tobe-custom", "--model", customProvider.model);
+    }
     if (existingSession) args.push("--session", existingSession);
     this.setProcessState(recovering ? "recovering" : "starting");
     this.lastError = null;
@@ -121,6 +163,7 @@ export class AgentHost extends EventEmitter {
       await this.refreshState();
       await this.command({ type: "set_session_name", name: SESSION_NAME });
       await this.refreshState();
+      await this.refreshMetrics();
       this.restartAttempt = 0;
       this.setProcessState("running");
     } catch (error) {
@@ -175,7 +218,9 @@ export class AgentHost extends EventEmitter {
       }
     }
     this.broadcast("agent.event", value);
-    if (value.type === "agent_start" || value.type === "agent_end" || value.type === "message_end") void this.refreshState().catch(() => undefined);
+    if (value.type === "agent_start" || value.type === "agent_end" || value.type === "message_end") {
+      void this.refreshState().then(() => this.refreshMetrics()).catch(() => undefined);
+    }
   }
 
   private handleExit(error: Error): void {
@@ -188,6 +233,7 @@ export class AgentHost extends EventEmitter {
     }
     this.lastError = error.message;
     if (!this.desiredRunning) {
+      this.lastError = null;
       this.setProcessState("stopped");
       return;
     }

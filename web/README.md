@@ -1,6 +1,6 @@
 # ToBe Web
 
-ToBe Web 是仓库内的单用户控制台。它维护一个名称固定为 `tobe` 的长期 Pi Session，提供对话、Awareness Adapter 配置和 Memory 文本审查。
+ToBe Web 是仓库内的单用户控制台。它维护一个名称固定为 `tobe` 的长期 Pi Session，提供完整的流式对话、Awareness Adapter 配置、Memory 文本审查和部署设置。
 
 ## 启动
 
@@ -45,6 +45,20 @@ Pi 启动时会忽略机器上全局安装的 extensions，并显式加载根 `p
 - `TOBE_WEB_PASSWORD`
 
 Web 启动后不会自动运行 Agent。请在会话页面明确点击“运行 Agent”。
+
+## 会话界面
+
+Web 展示 Pi 消息中的正文、思考过程、工具调用与工具结果，并在底部显示累计 Token、费用及当前上下文窗口占用。Pi extension 发起的选择、确认、单行输入和文本编辑请求会转为 Web 弹窗，通知、状态和 Widget 也会同步显示。
+
+输入 `/command` 时内容会原样交给 Pi RPC。当前 extension、prompt template 和 skill 注册的命令均可执行；命令处理期间产生的交互请求会留在同一个 Web 会话内完成。
+
+Pi 的 `/login`、`/logout` 原本仅由 TUI 实现，RPC 不提供这两个内建命令。Web 启动 Agent 时会额外加载仅限 RPC 的命令桥：`/login [provider]` 可完成 OAuth 或 API Key 认证，`/logout [provider]` 可移除对应凭据。认证文件变化后 Agent 会自动恢复，使新凭据进入运行时；直接执行 `npm run start:pi` 时仍使用 Pi 原生命令，不受此桥接层影响。
+
+## 自定义 Provider
+
+“设置”位于侧边栏底部。可启用一个名为 `tobe-custom` 的 OpenAI Chat Completions 兼容 Provider，填写 Base URL、API Key 和 Model。Base URL 末尾没有 `/v1` 时 Web 会自动补全；Key 保存在不受 Git 跟踪的 `web/config.json` 中，API 只向页面返回是否已经设置。
+
+Provider 配置在下一次运行 Agent 时生效。若 Agent 正在运行，保存后请先停止再重新运行。
 
 ## Adapter 配置
 

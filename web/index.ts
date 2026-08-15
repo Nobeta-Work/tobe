@@ -11,7 +11,7 @@ import { listMemory, readMemory, saveMemory } from "./modules/memory.ts";
 
 let config = await loadWebConfig();
 const access = new AccessControl(config);
-const agent = new AgentHost();
+const agent = new AgentHost(() => config.customProvider);
 const eventClients = new Set<ServerResponse>();
 
 agent.on("event", (event: unknown) => broadcast(event));
@@ -68,8 +68,12 @@ async function handleApi(request: IncomingMessage, response: ServerResponse, url
   }
   if (!access.isAuthenticated(request)) throw new HttpError(401, "需要登录");
 
-  if (request.method === "PUT" && url.pathname === "/api/access") {
-    const body = await readJson(request) as { passwordEnabled?: unknown; password?: unknown; allowedIps?: unknown };
+  if (request.method === "PUT" && (url.pathname === "/api/settings" || url.pathname === "/api/access")) {
+    const body = await readJson(request) as {
+      passwordEnabled?: unknown; password?: unknown; allowedIps?: unknown;
+      customProvider?: { enabled?: unknown; baseUrl?: unknown; apiKey?: unknown; model?: unknown };
+    };
+    let providerChanged = false;
     const passwordEnabled = body.passwordEnabled === true;
     const password = typeof body.password === "string" ? body.password : "";
     if (!Array.isArray(body.allowedIps) || !body.allowedIps.every((value) => typeof value === "string")) throw new HttpError(400, "IP 白名单必须是文本列表");
@@ -83,19 +87,41 @@ async function handleApi(request: IncomingMessage, response: ServerResponse, url
       const credentials = await hashPassword(password);
       next = { ...next, passwordHash: credentials.hash, passwordSalt: credentials.salt };
     } else if (!next.passwordHash) throw new HttpError(400, "启用密码访问时必须填写新密码");
+    if (body.customProvider) {
+      const provider = body.customProvider;
+      const enabled = provider.enabled === true;
+      const baseUrl = typeof provider.baseUrl === "string" ? normalizeProviderUrl(provider.baseUrl) : next.customProvider.baseUrl;
+      const model = typeof provider.model === "string" ? provider.model.trim() : next.customProvider.model;
+      const apiKey = typeof provider.apiKey === "string" && provider.apiKey ? provider.apiKey : next.customProvider.apiKey;
+      if (enabled && (!baseUrl || !model || !apiKey)) throw new HttpError(400, "启用自定义 Provider 时必须填写 Base URL、Key 和 Model");
+      const customProvider = { enabled, baseUrl, model, apiKey };
+      providerChanged = JSON.stringify(customProvider) !== JSON.stringify(next.customProvider);
+      next = { ...next, customProvider };
+    }
     await saveWebConfig(next);
     config = next;
     access.updateConfig(next);
     if (!wasPasswordRequired && passwordEnabled) access.setSessionCookie(response, access.issueSession());
     if (!passwordEnabled) access.clearSessionCookie(response);
-    json(response, 200, { passwordEnabled: access.passwordRequired, allowedIps, currentIp: ip });
+    json(response, 200, {
+      passwordEnabled: access.passwordRequired,
+      allowedIps,
+      currentIp: ip,
+      customProvider: publicProvider(next),
+      requiresAgentRestart: providerChanged && agent.snapshot().processState !== "stopped",
+    });
     return;
   }
   if (request.method === "GET" && url.pathname === "/api/bootstrap") {
     const [adapters, memory] = await Promise.all([listAdapters(), listMemory()]);
     json(response, 200, {
       agent: agent.snapshot(), adapters, memory, sessionName: "tobe",
-      access: { passwordEnabled: access.passwordRequired, allowedIps: config.allowedIps, currentIp: ip },
+      settings: {
+        passwordEnabled: access.passwordRequired,
+        allowedIps: config.allowedIps,
+        currentIp: ip,
+        customProvider: publicProvider(config),
+      },
     });
     return;
   }
@@ -104,10 +130,18 @@ async function handleApi(request: IncomingMessage, response: ServerResponse, url
   if (request.method === "POST" && url.pathname === "/api/agent/stop") { json(response, 200, await agent.stop()); return; }
   if (request.method === "POST" && url.pathname === "/api/agent/abort") { await agent.abort(); json(response, 200, { aborted: true }); return; }
   if (request.method === "GET" && url.pathname === "/api/agent/state") { json(response, 200, await agent.refreshState()); return; }
+  if (request.method === "GET" && url.pathname === "/api/agent/stats") { json(response, 200, await agent.refreshMetrics()); return; }
   if (request.method === "GET" && url.pathname === "/api/agent/messages") { json(response, 200, { messages: await agent.messages() }); return; }
   if (request.method === "POST" && url.pathname === "/api/agent/prompt") {
     const body = await readJson(request) as { message?: unknown };
     await agent.prompt(typeof body.message === "string" ? body.message : "");
+    json(response, 202, { accepted: true });
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/agent/ui-response") {
+    const body = await readJson(request);
+    if (!body || typeof body !== "object") throw new HttpError(400, "交互响应格式无效");
+    agent.respondToUi(body as Record<string, unknown>);
     json(response, 202, { accepted: true });
     return;
   }
@@ -203,3 +237,25 @@ function mimeType(path: string): string {
 }
 
 function displayHost(host: string): string { return host === "0.0.0.0" ? "localhost" : host; }
+
+function normalizeProviderUrl(value: string): string {
+  const raw = value.trim();
+  if (!raw) return "";
+  let url: URL;
+  try { url = new URL(raw); } catch { throw new HttpError(400, "自定义 Provider Base URL 无效"); }
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new HttpError(400, "自定义 Provider 仅支持 HTTP 或 HTTPS");
+  url.search = "";
+  url.hash = "";
+  const path = url.pathname.replace(/\/+$/, "");
+  url.pathname = path.endsWith("/v1") ? path : `${path}/v1`;
+  return url.toString().replace(/\/$/, "");
+}
+
+function publicProvider(value: WebConfig): Record<string, unknown> {
+  return {
+    enabled: value.customProvider.enabled,
+    baseUrl: value.customProvider.baseUrl,
+    model: value.customProvider.model,
+    hasKey: Boolean(value.customProvider.apiKey),
+  };
+}

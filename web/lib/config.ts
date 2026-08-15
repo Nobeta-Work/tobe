@@ -13,6 +13,14 @@ export interface WebConfig {
   trustProxy: boolean;
   passwordHash: string;
   passwordSalt: string;
+  customProvider: CustomProviderConfig;
+}
+
+export interface CustomProviderConfig {
+  enabled: boolean;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
 }
 
 interface StoredWebConfig extends Partial<WebConfig> {
@@ -26,6 +34,7 @@ const defaults: WebConfig = {
   trustProxy: false,
   passwordHash: "",
   passwordSalt: "",
+  customProvider: { enabled: false, baseUrl: "", apiKey: "", model: "" },
 };
 
 export async function loadWebConfig(): Promise<WebConfig> {
@@ -46,6 +55,7 @@ export async function loadWebConfig(): Promise<WebConfig> {
     trustProxy: stored.trustProxy ?? defaults.trustProxy,
     passwordHash: stored.passwordHash?.trim() || "",
     passwordSalt: stored.passwordSalt?.trim() || "",
+    customProvider: parseCustomProvider(stored.customProvider),
   };
 
   const environmentPassword = process.env.TOBE_WEB_PASSWORD;
@@ -84,4 +94,15 @@ function parsePort(value: string | undefined, fallback: number): number {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function parseCustomProvider(value: unknown): CustomProviderConfig {
+  if (!value || typeof value !== "object") return { ...defaults.customProvider };
+  const provider = value as Partial<CustomProviderConfig>;
+  return {
+    enabled: provider.enabled === true,
+    baseUrl: typeof provider.baseUrl === "string" ? provider.baseUrl.trim() : "",
+    apiKey: typeof provider.apiKey === "string" ? provider.apiKey : "",
+    model: typeof provider.model === "string" ? provider.model.trim() : "",
+  };
 }

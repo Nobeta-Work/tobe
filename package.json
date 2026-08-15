@@ -19,13 +19,14 @@
   },
   "pi": {
     "extensions": [
+      "./media/index.ts",
       "./awareness/index.ts",
       "./memory/index.ts"
     ]
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test awareness/tests/*.test.ts awareness/adapters/*/*.test.ts",
+    "test": "node --import tsx --test awareness/tests/*.test.ts awareness/adapters/*/*.test.ts media/tests/*.test.ts",
     "check": "npm run typecheck && npm test",
     "start": "node --import tsx web/index.ts",
     "start:pi": "pi",

@@ -5,5 +5,11 @@
   "trustProxy": false,
   "password": "",
   "passwordHash": "",
-  "passwordSalt": ""
+  "passwordSalt": "",
+  "customProvider": {
+    "enabled": false,
+    "baseUrl": "",
+    "apiKey": "",
+    "model": ""
+  }
 }

@@ -1,0 +1,48 @@
+{
+  "enabled": true,
+  "dataDir": "./data",
+  "artifactTtlMs": 86400000,
+  "maxInputBytes": 20971520,
+  "maxGeneratedBytes": 20971520,
+  "libraries": {
+    "stickers": { "path": "./data/library/stickers", "kinds": ["image"] },
+    "audio": { "path": "./data/library/audio", "kinds": ["audio"] }
+  },
+  "providers": {
+    "imageRecognition": {
+      "enabled": false,
+      "baseUrl": "",
+      "endpoint": "/v1/chat/completions",
+      "apiKeyEnv": "TOBE_MEDIA_IMAGE_RECOGNITION_KEY",
+      "model": "",
+      "timeoutMs": 60000
+    },
+    "audioRecognition": {
+      "enabled": false,
+      "baseUrl": "",
+      "endpoint": "/v1/audio/transcriptions",
+      "apiKeyEnv": "TOBE_MEDIA_AUDIO_RECOGNITION_KEY",
+      "model": "",
+      "timeoutMs": 60000
+    },
+    "imageGeneration": {
+      "enabled": false,
+      "baseUrl": "",
+      "endpoint": "/v1/images/generations",
+      "apiKeyEnv": "TOBE_MEDIA_IMAGE_GENERATION_KEY",
+      "model": "",
+      "timeoutMs": 120000,
+      "responseFormat": "b64_json"
+    },
+    "audioGeneration": {
+      "enabled": false,
+      "baseUrl": "",
+      "endpoint": "/v1/audio/speech",
+      "apiKeyEnv": "TOBE_MEDIA_AUDIO_GENERATION_KEY",
+      "model": "",
+      "timeoutMs": 120000,
+      "voice": "alloy",
+      "responseFormat": "mp3"
+    }
+  }
+}

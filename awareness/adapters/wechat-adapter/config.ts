@@ -27,7 +27,7 @@ const DEFAULTS: WeChatConfig = {
   logLevel: "warn",
   botAgent: "ToBe/wechat-adapter",
   identity: { ownerIds: [] },
-  receive: { messageTypes: ["text"], allowUsers: [], denyUsers: [] },
+  receive: { messageTypes: ["text", "image", "voice"], allowUsers: [], denyUsers: [] },
   events: { dedupeTtlMs: 3_600_000, messageCacheTtlMs: 3_600_000, maxCachedMessages: 500 },
 };
 

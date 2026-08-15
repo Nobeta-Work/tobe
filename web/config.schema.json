@@ -21,6 +21,16 @@
       "description": "One-time plaintext password. It is replaced by a scrypt hash at startup."
     },
     "passwordHash": { "type": "string" },
-    "passwordSalt": { "type": "string" }
+    "passwordSalt": { "type": "string" },
+    "customProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "baseUrl": { "type": "string", "description": "OpenAI-compatible API base URL; /v1 is appended when omitted." },
+        "apiKey": { "type": "string", "x-sensitive": true },
+        "model": { "type": "string" }
+      }
+    }
   }
 }
