@@ -15,7 +15,7 @@
     "url": "https://github.com/Nobeta-Work/tobe.git"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.19.0"
   },
   "pi": {
     "extensions": [
@@ -34,13 +34,14 @@
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.73.0",
-    "@wechatbot/wechatbot": "^2.2.0"
+    "@wechatbot/wechatbot": "^2.2.0",
+    "typebox": "1.3.7"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.74.2",
+    "@earendil-works/pi-coding-agent": "^0.84.2",
     "@types/node": "^22.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"

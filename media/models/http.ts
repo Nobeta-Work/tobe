@@ -136,7 +136,7 @@ export class HttpMediaModels implements MediaModels {
   async #request(config: MediaApiConfig, init: RequestInit, signal?: AbortSignal): Promise<Response> {
     const url = new URL(config.endpoint, withTrailingSlash(config.baseUrl));
     const headers = new Headers(init.headers);
-    const apiKey = config.apiKeyEnv ? process.env[config.apiKeyEnv]?.trim() : undefined;
+    const apiKey = config.apiKey.trim();
     if (apiKey) headers.set("authorization", `Bearer ${apiKey}`);
     let response: Response;
     try {

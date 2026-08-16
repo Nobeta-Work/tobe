@@ -63,3 +63,11 @@ awareness_engine({ "action": "unregister_adapter", "args": { "adapter_id": "运�
 ```
 
 `call_id` 是当前 function call 的回调凭证。成功和失败均在 `content` 中，当前 JSON 约定使用 `status: "success" | "error"`。
+
+## 权限与隐私
+对来源 `trust` 等级：
+- `low`: 禁止写操作和生成型媒体、其他工具调用，如有需要只允许调用检索型媒体，根据上下文直接回应消息。
+- `medium`: 禁止本地写操作、跨 Adapter 工具调用，允许生成型媒体调用。
+- `high`: 允许工作区写操作，本地读操作，允许跨 Adapter 工具调用。
+- `max`: 最高权限。
+除上述权限外，除非 用户本人 显式确认查询密钥、密码外，所有密钥、密码必须掩码传递出 Adapter。

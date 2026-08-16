@@ -29,6 +29,7 @@ import { likeUser, switchRoom } from "./scripts/switch-room.ts";
 import { getMedia, mediaErrorResult, parseMediaInput } from "../../../media/index.ts";
 import type { MediaService, ResolvedMedia } from "../../../media/type.ts";
 import { uploadIIroseMedia } from "./scripts/upload-media.ts";
+import { sendIIroseAudioUrl } from "./scripts/send-audio.ts";
 
 export interface IIroseAdapterOptions { configPath?: string; config?: IIroseConfig; mediaService?: MediaService }
 
@@ -347,34 +348,15 @@ export class IIroseAdapter implements EnvAdapter {
     catch (error) { this.#setHealth("degraded", error instanceof Error ? error.message : String(error)); }
   }
 
-  async #sendUploadedMedia(media: ResolvedMedia, url: string, caption?: string): Promise<"image" | "audio_card"> {
+  async #sendUploadedMedia(media: ResolvedMedia, url: string, caption?: string): Promise<"image" | "audio_url"> {
     if (media.artifact.kind === "image") {
       const content = `${caption ? `${caption}\n` : ""}[${url}#e]`;
       await sendMessage(this.#client, this.#config, { content });
       return "image";
     }
     if (media.artifact.kind !== "audio") throw new Error(`IIROSE cannot send ${media.artifact.kind} media`);
-    const title = caption || media.artifact.fileName || "音频";
-    const cover = this.#config.media.audioCoverUrl;
-    const messageId = `${Date.now()}`;
-    await this.#client.send(JSON.stringify({
-      m: `m__4@0>${this.#escapeEntity(title)}>ToBe>${cover}>${this.#config.profile.messageColor}>${this.#config.media.audioBitRate}`,
-      mc: this.#config.profile.messageColor, i: messageId,
-    }));
-    await this.#client.send(`&1${JSON.stringify({
-      s: this.#removeHttp(url), d: Math.ceil((media.artifact.durationMs ?? 0) / 1000),
-      c: this.#removeHttp(cover), n: title, r: "ToBe", b: "@0", o: "", l: "",
-    })}`);
-    return "audio_card";
+    return sendIIroseAudioUrl(this.#client, this.#config, url);
   }
-
-  #escapeEntity(value: string): string {
-    return value.replace(/[<>&"']/g, (character) => ({
-      "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;",
-    })[character] ?? character);
-  }
-
-  #removeHttp(url: string): string { return url.startsWith("http") ? url.slice(4) : url; }
 
   #pluginHelp(): readonly string[] {
     if (!this.#config.plugins.music.enabled) return [];

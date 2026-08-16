@@ -8,9 +8,19 @@ import type { MediaService } from "./type.ts";
 export * from "./type.ts";
 export { Media, mediaErrorResult, parseMediaInput } from "./media.ts";
 
-let activeMedia: MediaService | undefined;
+const MEDIA_SLOT = Symbol.for("@nobeta-work/tobe/media-service/v1");
 
-export function getMedia(): MediaService | undefined { return activeMedia; }
+interface ActiveMediaSlot { service: MediaService }
+
+function mediaRegistry(): Record<PropertyKey, unknown> {
+  return globalThis as Record<PropertyKey, unknown>;
+}
+
+function activeMediaSlot(): ActiveMediaSlot | undefined {
+  return mediaRegistry()[MEDIA_SLOT] as ActiveMediaSlot | undefined;
+}
+
+export function getMedia(): MediaService | undefined { return activeMediaSlot()?.service; }
 
 export default function mediaExtension(pi: ExtensionAPI): void {
   const config = loadMediaConfig();
@@ -20,12 +30,15 @@ export default function mediaExtension(pi: ExtensionAPI): void {
 
 /** Separate installation seam keeps the Pi lifecycle testable and providers replaceable. */
 export function installMediaExtension(pi: ExtensionAPI, service: MediaService): void {
-  if (activeMedia) throw new Error("Media is already installed");
-  activeMedia = service;
+  if (activeMediaSlot()) throw new Error("Media is already installed");
+  const slot: ActiveMediaSlot = { service };
+  mediaRegistry()[MEDIA_SLOT] = slot;
   registerMediaTools(pi, service);
 
   pi.on("resources_discover", () => ({
     skillPaths: [fileURLToPath(new URL("./SKILL.md", import.meta.url))],
   }));
-  pi.on("session_shutdown", () => { if (activeMedia === service) activeMedia = undefined; });
+  pi.on("session_shutdown", () => {
+    if (activeMediaSlot() === slot) delete mediaRegistry()[MEDIA_SLOT];
+  });
 }

@@ -17,7 +17,7 @@ Agent -> media_list -> Agent -> Adapter interact -> Media.resolve(library) -> Ad
 Agent -> media_generate -> mediaId -> Adapter interact -> Media.resolve(artifact) -> Adapter -> 环境
 ```
 
-`config.default.json` 会在首次加载时复制为不受 Git 跟踪的 `config.json`。图片识别、音频识别、图片生成和音频生成分别配置 API、模型、密钥环境变量与超时。默认模型实现使用 OpenAI-compatible 的四类端点；Media 核心只依赖精简的 `MediaModels` 接口，可直接替换。
+`config.default.json` 会在首次加载时复制为不受 Git 跟踪的 `config.json`。图片识别、音频识别、图片生成和音频生成分别配置 API、模型、API Key 与超时。默认模型实现使用 OpenAI-compatible 的四类端点；Media 核心只依赖精简的 `MediaModels` 接口，可直接替换。
 
 ## 文件布局与寻址
 

@@ -41,12 +41,12 @@
           "type": "object",
           "title": "图片识别",
           "additionalProperties": false,
-          "required": ["enabled", "baseUrl", "endpoint", "apiKeyEnv", "model", "timeoutMs"],
+          "required": ["enabled", "baseUrl", "endpoint", "model", "timeoutMs"],
           "properties": {
             "enabled": { "type": "boolean", "title": "启用图片识别" },
             "baseUrl": { "type": "string", "title": "Base URL" },
             "endpoint": { "type": "string", "minLength": 1, "title": "Endpoint" },
-            "apiKeyEnv": { "type": "string", "title": "API Key 环境变量" },
+            "apiKey": { "type": "string", "title": "API Key", "x-sensitive": true },
             "model": { "type": "string", "title": "Model" },
             "timeoutMs": { "type": "integer", "minimum": 1, "title": "超时毫秒数" }
           }
@@ -55,12 +55,12 @@
           "type": "object",
           "title": "音频识别",
           "additionalProperties": false,
-          "required": ["enabled", "baseUrl", "endpoint", "apiKeyEnv", "model", "timeoutMs"],
+          "required": ["enabled", "baseUrl", "endpoint", "model", "timeoutMs"],
           "properties": {
             "enabled": { "type": "boolean", "title": "启用音频识别" },
             "baseUrl": { "type": "string", "title": "Base URL" },
             "endpoint": { "type": "string", "minLength": 1, "title": "Endpoint" },
-            "apiKeyEnv": { "type": "string", "title": "API Key 环境变量" },
+            "apiKey": { "type": "string", "title": "API Key", "x-sensitive": true },
             "model": { "type": "string", "title": "Model" },
             "timeoutMs": { "type": "integer", "minimum": 1, "title": "超时毫秒数" }
           }
@@ -69,12 +69,12 @@
           "type": "object",
           "title": "图片生成",
           "additionalProperties": false,
-          "required": ["enabled", "baseUrl", "endpoint", "apiKeyEnv", "model", "timeoutMs", "responseFormat", "downloadHosts"],
+          "required": ["enabled", "baseUrl", "endpoint", "model", "timeoutMs", "responseFormat", "downloadHosts"],
           "properties": {
             "enabled": { "type": "boolean", "title": "启用图片生成" },
             "baseUrl": { "type": "string", "title": "Base URL" },
             "endpoint": { "type": "string", "minLength": 1, "title": "Endpoint" },
-            "apiKeyEnv": { "type": "string", "title": "API Key 环境变量" },
+            "apiKey": { "type": "string", "title": "API Key", "x-sensitive": true },
             "model": { "type": "string", "title": "Model" },
             "timeoutMs": { "type": "integer", "minimum": 1, "title": "超时毫秒数" },
             "responseFormat": { "type": "string", "enum": ["b64_json", "url"], "title": "响应格式" },
@@ -90,12 +90,12 @@
           "type": "object",
           "title": "音频生成",
           "additionalProperties": false,
-          "required": ["enabled", "baseUrl", "endpoint", "apiKeyEnv", "model", "timeoutMs", "voice", "responseFormat"],
+          "required": ["enabled", "baseUrl", "endpoint", "model", "timeoutMs", "voice", "responseFormat"],
           "properties": {
             "enabled": { "type": "boolean", "title": "启用音频生成" },
             "baseUrl": { "type": "string", "title": "Base URL" },
             "endpoint": { "type": "string", "minLength": 1, "title": "Endpoint" },
-            "apiKeyEnv": { "type": "string", "title": "API Key 环境变量" },
+            "apiKey": { "type": "string", "title": "API Key", "x-sensitive": true },
             "model": { "type": "string", "title": "Model" },
             "timeoutMs": { "type": "integer", "minimum": 1, "title": "超时毫秒数" },
             "voice": { "type": "string", "minLength": 1, "title": "Voice" },

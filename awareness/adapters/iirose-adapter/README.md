@@ -81,6 +81,6 @@ Agent 不直接注册 IIROSE 专属 function tools。它先通过全局 `awarene
 
 ## 增量边界
 
-`send_media` 把 Media 服务解析出的图片/音频字节，以 `credentials.uid` 作为 multipart 的 `i` 字段、文件作为 `f[]` 上传到 IIROSE 官方 `file_upload.php`。图片响应为 `i/...`，WAV 音频实测返回 `m/...`，两者都会与 `http://r.iirose.com/` 拼接；图片使用 `[URL#e]`，音频沿用点歌播放卡片协议。该 action 只发送到当前公屏，不提供私聊媒体参数。撤回、服务发现与完整 IIROSE 富文本仍可增量实现。
+`send_media` 的图片和 MediaInput 音频会把 Media 服务解析出的字节，以 `credentials.uid` 作为 multipart 的 `i` 字段、文件作为 `f[]` 上传到 IIROSE 官方 `file_upload.php`；图片响应为 `i/...`，音频响应为 `m/...`，两者都会与 `http://r.iirose.com/` 拼接。图片使用 `[URL#e]`；音频则把上传得到的完整 MP3 URL 作为普通消息直接发送，不再发送 `m__4`/`&1` 音乐卡片双帧，也不附加 caption。该 action 只发送到当前公屏，不提供私聊媒体参数。撤回、服务发现与完整 IIROSE 富文本仍可增量实现。
 
 协议实现参考 [adapter-iirose](https://github.com/iirose-plugins/adapter-iirose) 与 [IIROSE 插件文档](https://iirose-plugins.github.io/iirose-plugins-docs/)；本实现没有复制 Koishi 运行时。

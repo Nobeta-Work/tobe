@@ -9,7 +9,7 @@ export const BASIC_ACTIONS: readonly AdapterActionDefinition[] = [
   },
   {
     action: "send_media", mode: "interact",
-    description: "解析 Media 图片/音频，经 IIROSE 官方接口上传并发送到当前房间。",
+    description: "解析 Media 图片/音频并发送到当前房间；音频上传后直接发送返回的 MP3 URL。",
     parameters: {
       media: "MediaInput, required (artifact mediaId or library kind/category/tag)",
       caption: "string, optional",

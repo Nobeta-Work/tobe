@@ -19,7 +19,8 @@
     "memory/**/*.ts",
     "live/**/*.ts",
     "agent/**/*.ts",
-    "runtime/**/*.ts"
+    "runtime/**/*.ts",
+    "web/**/*.ts"
   ],
   "exclude": ["node_modules", "tmp"]
 }

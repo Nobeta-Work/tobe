@@ -9,6 +9,7 @@ import { MonthlyMessageLog, type MessageLogEntry } from "./message-log.ts";
 import { ActivePlugin } from "./plugins/active.ts";
 import { parseIncomingFrame } from "./protocol.ts";
 import { uploadIIroseMedia } from "./scripts/upload-media.ts";
+import { sendIIroseAudioUrl } from "./scripts/send-audio.ts";
 import type { IIroseConfig } from "./config.ts";
 import { runCommand, type CommandContext } from "./scripts/help.ts";
 
@@ -96,6 +97,22 @@ test("official IIROSE upload accepts the m/ path returned for audio", async () =
     }, data: new Uint8Array([0x52, 0x49, 0x46, 0x46]),
   }, async () => new Response("m/26/8/16/6/5132-LW.wav", { status: 200 }));
   assert.equal(uploaded.url, "http://r.iirose.com/m/26/8/16/6/5132-LW.wav");
+});
+
+test("IIROSE sends the uploaded MP3 URL as one ordinary message", async () => {
+  const frames: string[] = [];
+  const config = {
+    credentials: { uid: "69ff206c0351f1" },
+    profile: { messageColor: "#ffffff" },
+    media: {
+      audioCoverUrl: "http://r.iirose.com/i/26/3/6/4/5918-8B.png", audioBitRate: 320,
+    },
+  } as IIroseConfig;
+  const url = "http://r.iirose.com/m/26/8/16/12/3916-E9.mp3";
+  assert.equal(await sendIIroseAudioUrl({ send: async (frame) => { frames.push(frame); } }, config, url), "audio_url");
+  assert.equal(frames.length, 1);
+  assert.equal(JSON.parse(frames[0]!).m, url);
+  assert.equal(JSON.parse(frames[0]!).m.includes("m__4@"), false);
 });
 
 test("admin-only local commands are consumed without executing side effects", async () => {

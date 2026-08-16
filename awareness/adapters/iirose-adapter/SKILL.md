@@ -35,7 +35,7 @@ Actor 映射：管理员 UID 为 `user`，`credentials.uid` 为 `assistant`，�
 ## Basic actions
 
 - `awareness_interact`: `send_message`, args `{ "content": "必填文本", "userId": "可选私聊目标 UID" }`。
-- `awareness_interact`: `send_media`, args `{ "media": MediaInput, "caption": "可选" }`。要求 Adapter 在线且 Media 已加载；接受 `image`/`audio`，通过官方上传接口发送到当前公屏，不接受私聊目标。检索输入为 `{ "source":"library", "kind":"image|audio", "category":"...", "tag":"...", "selection":"random|best（可选）" }`；生成输入为 `{ "source":"artifact", "mediaId":"media_generate 返回值" }`。
+- `awareness_interact`: `send_media`, args `{ "media": MediaInput, "caption": "可选" }`。MediaInput 由 Adapter 从 Media 服务解析；图片和音频都会先通过官方上传接口，音频上传返回的 MP3 URL 随后以普通消息直接发送，不构造 `m__4`/`&1` 音乐卡片帧；为保证 URL 原样发送，音频不附加 caption。检索输入为 `{ "source":"library", "kind":"image|audio", "category":"...", "tag":"...", "selection":"random|best（可选）" }`；生成输入为 `{ "source":"artifact", "mediaId":"media_generate 返回值" }`。不接受私聊目标。
 - `awareness_observe`: `logs`, args `{}`，返回当月 `YYYYMM` 日志状态。
 - `awareness_observe`: `history`, args `{ "start": 11, "end": 20 }`，读取当月距最新第 11–20 条；起止为正整数闭区间，每次最多 100 条，不能指定月份或文件。
 - `awareness_interact`: `request_music`, args `{ "name": "必填歌名" }`。搜索第一首结果并向当前房间发送 IIROSE 点歌双帧。
@@ -48,6 +48,6 @@ Actor 映射：管理员 UID 为 `user`，`credentials.uid` 为 `assistant`，�
 
 支持命令匹配的插件独立配置 `prefix/adminOnly/whiteList`。`prefix="{name}"` 表示必须以 ` [*credentials.username*] ` 或 `nickname` 称呼 ToBe。点歌插件默认允许普通场景参与者使用，例如 ` [*菲比啾比*] 点歌稻香`、`菲比点歌稻香`。命中插件后不进入 Engine。
 
-默认配置下 `/active {level}`、`/room {roomId}`、`/follow {boolean}` 受 `commands.adminOnly` 限制。`low`/`medium` 只延长基础触发后的长/短公屏窗口，`high` 每句公屏触发；这些运行时切换不会写回配置。媒体发送使用 `credentials.uid` 作为官方上传接口的 `i` 字段；图片响应为 `i/...`，音频响应为 `m/...`，并拼接为 `r.iirose.com` URL 后发送。
+默认配置下 `/active {level}`、`/room {roomId}`、`/follow {boolean}` 受 `commands.adminOnly` 限制。`low`/`medium` 只延长基础触发后的长/短公屏窗口，`high` 每句公屏触发；这些运行时切换不会写回配置。MediaInput 图片和音频使用 `credentials.uid` 作为官方上传接口的 `i` 字段；音频上传后的完整 MP3 URL 作为普通消息发送。
 
 所有结果都使用全局 `{ call_id, adapter_id, action, timestamp, content }` 信封；解析 `content.status` 判断成功或失败。不要回显凭证、原始帧或完整配置。

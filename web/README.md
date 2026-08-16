@@ -72,7 +72,7 @@ Web 扫描 `awareness/adapters/*-adapter`。每个 Adapter 必须以自身目录
 
 侧边栏中的 Media 页面读取 `media/config.schema.json`，并生成图片识别、音频识别、图片生成和音频生成的配置表单。缺少 `media/config.json` 时，首次打开页面会复制 `media/config.default.json`。
 
-保存会直接更新 `media/config.json`。Media 在 Agent 启动时实例化，因此运行中的 Agent 不会热重载该配置；停止并重新运行 Agent 后生效。`apiKeyEnv` 填写环境变量名称，实际 API Key 不写入 Media 配置文件。
+保存会直接更新 `media/config.json`。Media 在 Agent 启动时实例化，因此运行中的 Agent 不会热重载该配置；停止并重新运行 Agent 后生效。各 Provider 直接填写 `apiKey`；该字段标记为敏感值，Web 不会回传已保存的实际内容。
 
 ## Memory
 
