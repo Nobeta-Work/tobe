@@ -3,6 +3,7 @@ const state = {
   selectedAdapter: null, adapterData: null, mediaData: null, mediaLoading: false, selectedMemory: null,
   eventSource: null, refreshTimer: null, dialogQueue: [], activeDialog: null,
   extensionStatuses: new Map(), widgets: new Map(), liveRenderPending: false,
+  commandMatches: [], activeCommandIndex: 0,
 };
 
 const views = {
@@ -25,7 +26,12 @@ document.querySelector("#provider-enabled").addEventListener("change", updateSet
 document.querySelector("#rpc-dialog-form").addEventListener("submit", submitRpcDialog);
 document.querySelector("#rpc-dialog-cancel").addEventListener("click", () => answerRpcDialog({ cancelled: true }));
 document.querySelector("#rpc-dialog").addEventListener("cancel", (event) => { event.preventDefault(); answerRpcDialog({ cancelled: true }); });
-document.querySelector("#prompt").addEventListener("keydown", (event) => {
+const promptField = document.querySelector("#prompt");
+promptField.addEventListener("input", renderCommandMenu);
+promptField.addEventListener("focus", renderCommandMenu);
+promptField.addEventListener("blur", () => setTimeout(hideCommandMenu, 120));
+promptField.addEventListener("keydown", (event) => {
+  if (handleCommandMenuKeydown(event)) return;
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
     document.querySelector("#composer").requestSubmit();
@@ -135,6 +141,7 @@ function renderAgent() {
   document.querySelector("#prompt").disabled = agent.processState !== "running";
   document.querySelector("#composer button").disabled = agent.processState !== "running";
   renderMetrics();
+  renderCommandMenu();
 }
 
 function setStatus(kind, label) {
@@ -176,6 +183,7 @@ async function sendPrompt(event) {
   const field = document.querySelector("#prompt");
   const message = field.value.trim();
   if (!message) return;
+  hideCommandMenu();
   field.value = "";
   try {
     await api("/api/agent/prompt", { method: "POST", body: { message } });
@@ -184,6 +192,125 @@ async function sendPrompt(event) {
     field.value = message;
     showError(error);
   }
+}
+
+function renderCommandMenu() {
+  const field = document.querySelector("#prompt");
+  const menu = document.querySelector("#command-menu");
+  const query = slashCommandQuery(field.value);
+  const commands = Array.isArray(state.agent?.commands) ? state.agent.commands : [];
+  if (query === null || !commands.length || field.disabled) {
+    hideCommandMenu();
+    return;
+  }
+  const normalizedQuery = query.toLocaleLowerCase();
+  state.commandMatches = commands.filter((command) =>
+    typeof command?.name === "string" && command.name.toLocaleLowerCase().includes(normalizedQuery)
+  );
+  if (!state.commandMatches.length) {
+    hideCommandMenu();
+    return;
+  }
+  state.activeCommandIndex = Math.min(state.activeCommandIndex, state.commandMatches.length - 1);
+  menu.replaceChildren(...state.commandMatches.map((command, index) => renderCommandOption(command, index)));
+  menu.hidden = false;
+  field.setAttribute("aria-expanded", "true");
+  updateActiveCommand();
+}
+
+function renderCommandOption(command, index) {
+  const option = element("button", "command-option");
+  option.type = "button";
+  option.id = `command-option-${index}`;
+  option.setAttribute("role", "option");
+  option.append(
+    element("span", "command-name", `/${command.name}`),
+    element("span", "command-description", command.description || "Pi 命令"),
+    element("span", "command-source", commandSourceLabel(command.source)),
+  );
+  option.addEventListener("mousedown", (event) => event.preventDefault());
+  option.addEventListener("click", () => applyCommand(index));
+  option.addEventListener("mousemove", () => {
+    if (state.activeCommandIndex === index) return;
+    state.activeCommandIndex = index;
+    updateActiveCommand();
+  });
+  return option;
+}
+
+function slashCommandQuery(value) {
+  if (!value.startsWith("/") || value.includes("\n")) return null;
+  const query = value.slice(1);
+  return /\s/.test(query) ? null : query;
+}
+
+function handleCommandMenuKeydown(event) {
+  const menu = document.querySelector("#command-menu");
+  if (menu.hidden || !state.commandMatches.length) return false;
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    const direction = event.key === "ArrowDown" ? 1 : -1;
+    state.activeCommandIndex = (state.activeCommandIndex + direction + state.commandMatches.length) % state.commandMatches.length;
+    updateActiveCommand();
+    return true;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    hideCommandMenu();
+    return true;
+  }
+  if (event.key === "Tab") {
+    event.preventDefault();
+    applyCommand(state.activeCommandIndex);
+    return true;
+  }
+  if (event.key === "Enter" && !event.shiftKey) {
+    const selected = state.commandMatches[state.activeCommandIndex];
+    if (document.querySelector("#prompt").value !== `/${selected.name}`) {
+      event.preventDefault();
+      applyCommand(state.activeCommandIndex);
+      return true;
+    }
+  }
+  return false;
+}
+
+function applyCommand(index) {
+  const command = state.commandMatches[index];
+  if (!command) return;
+  const field = document.querySelector("#prompt");
+  field.value = `/${command.name} `;
+  hideCommandMenu();
+  field.focus();
+  field.setSelectionRange(field.value.length, field.value.length);
+}
+
+function updateActiveCommand() {
+  const menu = document.querySelector("#command-menu");
+  [...menu.children].forEach((option, index) => {
+    const active = index === state.activeCommandIndex;
+    option.classList.toggle("active", active);
+    option.setAttribute("aria-selected", String(active));
+    if (active) {
+      document.querySelector("#prompt").setAttribute("aria-activedescendant", option.id);
+      option.scrollIntoView({ block: "nearest" });
+    }
+  });
+}
+
+function hideCommandMenu() {
+  const menu = document.querySelector("#command-menu");
+  menu.hidden = true;
+  menu.replaceChildren();
+  state.commandMatches = [];
+  state.activeCommandIndex = 0;
+  const field = document.querySelector("#prompt");
+  field.setAttribute("aria-expanded", "false");
+  field.removeAttribute("aria-activedescendant");
+}
+
+function commandSourceLabel(source) {
+  return source === "skill" ? "SKILL" : source === "prompt" ? "PROMPT" : "EXTENSION";
 }
 
 function scheduleMessageRefresh() {

@@ -84,10 +84,12 @@ export class AgentHost extends EventEmitter {
   }
 
   async prompt(message: string): Promise<void> {
-    if (!message.trim()) throw new Error("消息不能为空");
+    const input = message.trim();
+    if (!input) throw new Error("消息不能为空");
     if (!this.child) throw new Error("Agent 尚未启动");
-    await this.command({ type: "prompt", message: message.trim(), streamingBehavior: "followUp" });
+    await this.command({ type: "prompt", message: input, streamingBehavior: "followUp" });
     await this.refreshState();
+    if (input.startsWith("/")) await this.refreshMetrics();
   }
 
   async abort(): Promise<void> {

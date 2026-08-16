@@ -7,7 +7,7 @@
   <title>ToBe</title>
   <link rel="icon" type="image/webp" href="https://nobeta.cn/i/2026/08/13/bba032.webp">
   <link rel="apple-touch-icon" href="https://nobeta.cn/i/2026/08/13/bba032.webp">
-  <link rel="stylesheet" href="/style.css?v=4">
+  <link rel="stylesheet" href="/style.css?v=5">
 </head>
 <body>
   <div id="login" class="login-shell" hidden>
@@ -58,8 +58,9 @@
         </div>
         <form id="composer" class="composer">
           <label class="sr-only" for="prompt">发送消息</label>
-          <textarea id="prompt" rows="2" placeholder="向 ToBe 发送消息，也可以直接输入 /command"></textarea>
+          <textarea id="prompt" rows="2" placeholder="向 ToBe 发送消息，输入 / 查看全部命令" autocomplete="off" aria-autocomplete="list" aria-controls="command-menu" aria-expanded="false"></textarea>
           <button class="primary send-button" type="submit">发送 <span>↗</span></button>
+          <div id="command-menu" class="command-menu" role="listbox" aria-label="Pi 命令" hidden></div>
         </form>
         <div class="session-bar" aria-label="会话状态">
           <span id="metric-model">未选择模型</span>
@@ -119,6 +120,6 @@
     </form>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script type="module" src="/app.js?v=4"></script>
+  <script type="module" src="/app.js?v=5"></script>
 </body>
 </html>
