@@ -48,7 +48,7 @@ flowchart LR
 ```
 
 | 模块介绍 | 说明 |
-| :-: | :-: |
+| ------ | ---------- |
 | [Web](./web/README.md) | 单用户控制台、长期 Pi Session 与配置管理 |
 | [Awareness](./awareness/README.md) | 环境 Adapter、消息分级、主动推送与交互路由 |
 | [Memory](./memory/README.md) | 持久认知、Dream 与可演化 Skills |
