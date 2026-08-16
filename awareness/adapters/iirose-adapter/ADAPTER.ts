@@ -16,7 +16,7 @@ import { runCommand } from "./scripts/help.ts";
 import { listen } from "./scripts/listen.ts";
 import { login } from "./scripts/login.ts";
 import { logout } from "./scripts/logout.ts";
-import { sendMessage, type SendMessageArgs } from "./scripts/send-message.ts";
+import { sendMessage, sendLinesMessage, type SendMessageArgs } from "./scripts/send-message.ts";
 import { IIROSE_ACTIONS } from "./tools/index.ts";
 import { LocalResponseGuard } from "./local-response.ts";
 import { classifyIIroseActor } from "./actor.ts";
@@ -283,7 +283,11 @@ export class IIroseAdapter implements EnvAdapter {
           const response: SendMessageArgs = event.type === "message.private"
             ? { content: command.response, userId: event.userId }
             : { content: command.response };
-          await this.#safeSend(response);
+          if (command?.command === "help") {
+            await this.#safeLinesSend(response);
+          } else {
+            await this.#safeSend(response);
+          }
         }
         return;
       }
@@ -343,6 +347,14 @@ export class IIroseAdapter implements EnvAdapter {
   async #safeSend(args: SendMessageArgs): Promise<void> {
     try {
       const sent = await sendMessage(this.#client, this.#config, args);
+      this.#localResponses.remember(sent.messageId, args.content);
+    }
+    catch (error) { this.#setHealth("degraded", error instanceof Error ? error.message : String(error)); }
+  }
+
+  async #safeLinesSend(args: SendMessageArgs): Promise<void> {
+    try {
+      const sent = await sendLinesMessage(this.#client, this.#config, args);
       this.#localResponses.remember(sent.messageId, args.content);
     }
     catch (error) { this.#setHealth("degraded", error instanceof Error ? error.message : String(error)); }
