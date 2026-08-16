@@ -4,7 +4,7 @@ export const BASIC_ACTIONS: readonly AdapterActionDefinition[] = [
   {
     action: "send_message",
     mode: "interact",
-    description: "发送公屏文本；传 userId 时发送私聊。",
+    description: "发送公屏文本；传 userId 时发送私聊。长文本请使用 \\n 作为换行符。",
     parameters: { content: "non-empty string, required", userId: "string, optional" },
   },
   {
