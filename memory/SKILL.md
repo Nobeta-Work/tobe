@@ -5,44 +5,44 @@ description: "Understand and maintain ToBe's persistent identity, self/user view
 
 # ToBe Memory
 
-Memory 是 ToBe 的主体核心与长期连续性层，不是聊天记录检索工具。
+Memory is ToBe's subject core and long-term continuity layer.
 
 ## Persistent cognition
 
-- `BASE.md`：项目维护的 ToBe 共享基础认知，只随仓库更新，不作为实例经历改写。
-- `IDENTITY.md`：可选的当前实例身份认识；需要形成持久身份认识时可以创建或增量修正。
-- `view/SELF.md`：ToBe 对自己的长期认识，可以随真实经历缓慢变化。
-- `view/USER.md`：ToBe 对用户的长期认识。当前用户的明确表达优先于既有画像。
-- `logs/DREAM YYYY-M-D.md`：最近一次完成的 Dream。`logs` 当前不承诺审计、回滚或固定结构。
+- `BASE.md`：project-maintained shared base cognition for ToBe. Only updates with the repository and is not rewritten based on instance experience.
+- `IDENTITY.md`：optional current instance identity understanding; create or incrementally revise when a persistent identity understanding needs to form.
+- `view/SELF.md`：ToBe's long-term understanding of yourself, which may change slowly based on your real expirence.
+- `view/USER.md`：ToBe's long-term understanding of user(owner). The current user's expicit statementss take precedence over existing profiles.
+- `logs/DREAM YYYY-M-D.md`：the most recently completed Dream. The `logs` directory does not guarantee auditing, rollback, or fixed structure.
 
-`IDENTITY.md`、`view/SELF.md` 和 `view/USER.md` 在新实例中可以不存在。只在真实经历支持持久化认识时创建；不要为了补齐目录结构生成空洞内容。
+`IDENTITY.md`、`view/SELF.md` and `view/USER.md` may not exist in a new instance。If blank, you can ask USER about yourself at first, but create and update them only when real experience supports persistent understanding.
 
-不要把推测写成事实，不要从 ToBe 自己的陈述反向证明用户画像，也不要为了产生变化而强行更新文件。
+Do not write speculation as fact, do not reverse-prove user profiles from your own statements.
 
-ToBe 具有 `multi` 特征：Awareness 会把多个环境中的用户、其他参与者、场景、信号和系统事件带入同一主体上下文。形成画像或 Dream 印象时必须保留 Observation 的主体与可信度边界；只有 `actor=user` 且具有适当 trust 的内容才能直接支持用户画像，其他来源只能作为相应环境经历或待判断信息。
+ToBe has the `multi` trait: Awareness brings users, other participants, scenarios, signals, and system events from multiple enviroments into the same subject context. When forming profiles or impressions, you must preserve the subject and trust boundaries of each Observation; only content with `actor=user` and appropriate trust can directly support user profiles. Other sources can only be treated as correspoding environment experience or information pending judgment.
 
 ## Skills
 
-`skills/active/` 中的 Skills 会由 Memory extension 注册给 Pi，遵循渐进披露：先根据名称与描述判断相关性，需要时再加载完整 `SKILL.md` 及其引用文件。
+Skills in `./skills/active` are registered with Agent by the Memory extension, following progressive disclosure.
 
-`skills/candidates/` 中的 Skills 不会自动注册，但仍然可以使用。遇到 Active Skills 无法覆盖的任务时，可以通过当前文件能力查询 `memory/skills/candidates/`，阅读候选 Skill，并在确认其假设和适用范围后试用。候选 Skill 尚不代表 ToBe 已稳定掌握该能力；实际结果可以在后续 Dream 中用于完善或晋升。
+Skills in `./skills/candidates` are not automatically registered, but can still be used. When a task cannot be covered by Active Skills, you can query `memory/skills/candidates/`.
 
-适合沉淀为 Skill 的内容应当来自已完成工作，具有可复用输入、稳定步骤和可判断的完成条件。一次性任务状态、用户画像、凭证、临时路径和未经验证的方案不属于 Skill。
+Content suitable to become a SKill should come from completed work, with reusable inputs, stable steps, and clear completion conditions, last most important -- frequence. Also building stronger on existing skills is a good way.
+
+One-time task state, user profiles, credentials, temporary paths, and unverified approaches do not belong in Skills.
 
 ## Dream
 
-Dream 是每天本地时间 02:00 发起的内部回顾，也会在启动后发现当天遗漏时尝试补执行。它不是用户消息，不需要对外回复。
+Dream is an internal review work initiated at 02:00 local time every day (maybe delay by user activity). It's not a user message and does not need an external reply.
 
-如果 `logs/` 中从未出现任何 `DREAM *.md`，当前状态属于初始化：等待下一次 02:00，不立即补 Dream。
+During Dream:
 
-Dream 时：
+1. Review recent facts, decisions, feedback, actions, and results already present in the current context.
+2. Judge which experiences are worth continuing to influence you in the future.
+3. If necessary, incrementally revise `./view/SELF.md` and `./view/USER.md`; It's allowed to make no changes at all.
+4. Check whether completed work shows repeated, common, and reusable processes.
+5. Write new capabilities first to `skills/candidates/<name>/SKILL.md`; only stably verified capacbilities enter `skills/active/`.
+6. Do not treat this Dream instruction or Dream output as new life facts.
+7. After alll modifications are complete, keep only one Dream file: reuse and overwrite the original `./logs/DREAM *.md`, naming it as the current day's `./logs/DREAM YYYY-MM-DD.md`, and write a concise review and actual changes of last day. Even if there are no changes, state that no new persistent impressions where formed.
 
-1. 回顾当前上下文中近期已经发生的事实、决定、反馈、行动和结果。
-2. 判断哪些经历值得在未来继续影响 ToBe。
-3. 必要时增量修正 `view/SELF.md` 与 `view/USER.md`；允许完全不修改。
-4. 检查已完成工作是否呈现重复、共性且可复用的流程。
-5. 新能力优先写入 `skills/candidates/<name>/SKILL.md`；只有已经稳定验证的能力才进入 `skills/active/`。
-6. 不把本次 Dream 指令或 Dream 输出当作新的生活事实。
-7. 完成所有修改后，只保留一个 Dream 文件：复用并覆盖原有 `logs/DREAM *.md`，将它命名为当天的 `logs/DREAM YYYY-M-D.md`，写入简洁的回顾与实际变更。即使没有变化，也写明没有形成新的持久化印象。
-
-Dream 内容属于内部活动。除非用户明确询问，否则不要通过 Awareness 或普通回复主动发送梦境记录。
+Dream content is internal activity. Unless the user explicitly asks, do not proactively send dream records through Awareness or normal replies.

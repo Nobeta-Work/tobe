@@ -9,6 +9,29 @@ Media 是 ToBe 的双向媒体扩展，当前规范化图片与音频，并为�
 - Media 负责本地媒体库扫描、生成模型调用、生成资产落盘和受约束解析。
 - Agent 始终通过文本 Tool Call 编排。支持原生多模态直传的 Adapter 可以自行承诺，但不是 Media 的默认路径。
 
+## 识别与调用
+
+Adapter 传入 Awareness Engine 或 Agent 自身想要查看媒体文件，应当优先将环境消息中传入的 Meida 允许的媒体类型文件调用 Media 模块工具进行识别，将识别结果封装替换该文件上下文传入，并存入本地存储库中。
+
+**识别**: 
+- 所有被识别的图片、音频，文件名前缀必须为12位的 `<id>`:`YYYYMMDD-??-`，在 `<id>` 与扩展名之间可以填写简要描述。
+- 根据媒体的类型 `<kind>`，存放在不同的目录下。`<kind>:<id>` 构成生成型媒体检索的基本索引 `<key>`，用于引用文件。
+- 识别工具允许传入文本 prompt 与多个基于检索型媒体的索引 `<key>`。
+
+**调用**:
+- Adapter 与 Agent 在上下文中通过媒体 `<key>` 作为指向存储的媒体索引。替换上下文为：
+```json
+{"module": "Media", "type": "${Media.type}", "key": "${key}", "desc": "${desc}"}
+```
+- Adapter 在发送 Agent 指定的媒体消息前，应当使用 Media 模块工具将真实媒体消息导入。
+
+**生成**:
+- Agent 可以调用 Media 工具传入发送给生成模型的上下文并生成媒体。
+- 上下文支持一定的复杂度、允许通过传入媒体 `<key>` 的方式传入真实媒体。例如，根据某个人设图和细节描述生成新的角色图。
+- Media 应承诺生成的图片符合 `<kind>:<id-desc>` 存储与索引，但只将 `<kind>:<id>` 响应 Agent。
+
+> 出于安全性，Adapter 应承诺在向环境发送媒体文件信息前修改文件名为随机命名。
+
 ## 双向流程
 
 ```text
@@ -25,11 +48,11 @@ Agent -> media_generate -> mediaId -> Adapter interact -> Media.resolve(artifact
 
 ```text
 media/
-  data/<kind>/<key-desc>.<ext>
+  data/<kind>/<id-desc>.<ext>
   lib/<kind>/<category>/<tag>/<file>
 ```
 
-生成 key 固定为本地日期加两位随机字符，例如 `20260816-8s-`，完整磁盘文件可以是 `data/image/20260816-8s-女孩子的照片.png`；没有描述时是 `data/image/20260816-8s-.png`。Agent 和 Adapter 只获得 `image:20260816-8s-`，解析时只匹配冒号后前 12 位 key。`desc` 仅供人工查看文件，不进入 Tool Result、检查结果或 Adapter 媒体对象。
+生成 id 固定为本地日期加两位随机字符，例如 `20260816-8s-`，完整磁盘文件可以是 `data/image/20260816-8s-女孩子的照片.png`；没有描述时是 `data/image/20260816-8s-.png`。Agent 和 Adapter 只获得 `image:20260816-8s-`，解析时只匹配冒号后前 12 位 key。
 
 媒体库按类型列出 `{ "<category>": ["<tag>"] }`。例如 `lib/image/stickers/开心/` 对应：
 

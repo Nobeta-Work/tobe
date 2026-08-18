@@ -237,7 +237,7 @@ export class IIroseAdapter implements EnvAdapter {
     }
 
     let history: MessageLogEntry[] = [];
-    let baseTrigger = isAdmin;
+    let baseTrigger = false;
     if (event.type === "message.public" || event.type === "message.private") {
       const mentioned = directlyAddressesBot(
         event.content, this.#config.credentials.username, this.#config.nickname, event.reply,
