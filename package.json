@@ -1,7 +1,6 @@
 {
-  "name": "@nobeta-work/tobe",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@nobeta/tobe",
+  "version": "0.2.0",
   "type": "module",
   "description": "A persistent personal companion agent built on Pi.",
   "license": "MIT",
@@ -26,7 +25,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test awareness/tests/*.test.ts awareness/adapters/*/*.test.ts media/tests/*.test.ts",
+    "test": "node --import tsx --test awareness/tests/*.test.ts awareness/adapters/*/*.test.ts media/tests/*.test.ts web/tests/*.test.ts",
     "check": "npm run typecheck && npm test",
     "start": "node --import tsx web/index.ts",
     "start:pi": "pi",

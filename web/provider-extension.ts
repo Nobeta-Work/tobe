@@ -18,11 +18,15 @@ export default async function customProviderExtension(pi: ExtensionAPI): Promise
     models: [{
       id: config.model,
       name: config.model,
-      reasoning: false,
+      reasoning: (config.thinkingLevel ?? "off") !== "off",
       input: ["text", "image"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 128000,
-      maxTokens: 16384,
+      contextWindow: config.contextLimit ?? 128000,
+      maxTokens: config.maxTokens ?? 16384,
     }],
+  });
+  pi.on("before_provider_request", (event) => {
+    if (!event.payload || typeof event.payload !== "object") return event.payload;
+    return { ...event.payload, temperature: config.temperature ?? 1 };
   });
 }

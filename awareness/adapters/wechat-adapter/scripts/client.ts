@@ -2,7 +2,7 @@ import type { WeChatConfig } from "../config.ts";
 import type { WeChatIncomingMessage } from "../protocol.ts";
 import { WECHAT_PUBLIC_USER_ID } from "../protocol.ts";
 import { detectMimeType } from "../../../../media/files/mime.ts";
-import type { MediaData, ResolvedMedia } from "../../../../media/type.ts";
+import type { MediaData, MediaMetadata } from "../../../../media/type.ts";
 
 export interface WeChatCredentials { accountId: string; userId: string; savedAt?: string }
 export interface LoginCallbacks {
@@ -26,14 +26,18 @@ export interface WeChatGateway {
   sendText(userId: string, content: string): Promise<void>;
   replyText(message: WeChatIncomingMessage, content: string): Promise<void>;
   downloadMedia?(message: WeChatIncomingMessage): Promise<MediaData | null>;
-  sendMedia?(userId: string, media: ResolvedMedia, caption?: string): Promise<void>;
-  replyMedia?(message: WeChatIncomingMessage, media: ResolvedMedia, caption?: string): Promise<void>;
+  sendMedia?(userId: string, media: MediaMetadata, caption?: string): Promise<void>;
+  replyMedia?(message: WeChatIncomingMessage, media: MediaMetadata, caption?: string): Promise<void>;
   sendTyping(userId: string): Promise<void>;
   rememberUser?(nativeUserId: string): Promise<void>;
 }
 
 type WeChatSendContent = string | { image: Buffer; caption?: string } | { video: Buffer; caption?: string } | { file: Buffer; fileName: string; caption?: string };
 interface WeChatDownloadedMedia { data: Buffer; type: "image" | "file" | "video" | "voice"; fileName?: string; format?: string }
+interface WeChatCdnMedia { encrypt_query_param: string; aes_key: string; encrypt_type?: 0 | 1; full_url?: string }
+interface WeChatWireItem { type: number; text_item?: { text: string }; voice_item?: { media: WeChatCdnMedia; encode_type: number; bits_per_sample?: number; sample_rate?: number; playtime?: number } }
+interface WeChatWireMessage { from_user_id: string; to_user_id: string; client_id: string; message_type: number; message_state: number; context_token: string; item_list: WeChatWireItem[] }
+interface SdkMessageBuilder { text(content: string): SdkMessageBuilder; build(): WeChatWireMessage }
 
 interface SdkBot {
   storage: { has(key: string): Promise<boolean>; get<T>(key: string): Promise<T | undefined>; set<T>(key: string, value: T): Promise<void> };
@@ -45,6 +49,9 @@ interface SdkBot {
   on(event: string, handler: (...args: any[]) => void | Promise<void>): unknown;
   send(userId: string, content: WeChatSendContent): Promise<void>;
   reply(message: WeChatIncomingMessage, content: WeChatSendContent): Promise<void>;
+  createMessage(userId: string): SdkMessageBuilder;
+  upload(options: { data: Buffer; userId: string; mediaType: number }): Promise<{ media: WeChatCdnMedia }>;
+  sendRaw(payload: WeChatWireMessage): Promise<void>;
   download(message: WeChatIncomingMessage): Promise<WeChatDownloadedMedia | null>;
   sendTyping(userId: string): Promise<void>;
 }
@@ -102,12 +109,16 @@ export class SdkWeChatGateway implements WeChatGateway {
       : media.type === "video" ? "video/mp4" : "application/octet-stream";
     return { kind, mimeType, data: media.data, ...(media.fileName ? { fileName: media.fileName } : {}) };
   }
-  async sendMedia(userId: string, media: ResolvedMedia, caption?: string): Promise<void> {
+  async sendMedia(userId: string, media: MediaMetadata, caption?: string): Promise<void> {
     const bot = await this.#getBot();
-    await bot.send(await this.#resolveUserId(bot, userId), toSendContent(media, caption));
+    const nativeUserId = await this.#resolveUserId(bot, userId);
+    if (media.kind === "audio") await sendWeChatVoice(bot, nativeUserId, media, caption);
+    else await bot.send(nativeUserId, toSendContent(media, caption));
   }
-  async replyMedia(message: WeChatIncomingMessage, media: ResolvedMedia, caption?: string): Promise<void> {
-    await (await this.#getBot()).reply(message, toSendContent(media, caption));
+  async replyMedia(message: WeChatIncomingMessage, media: MediaMetadata, caption?: string): Promise<void> {
+    const bot = await this.#getBot();
+    if (media.kind === "audio") await sendWeChatVoice(bot, message.userId, media, caption);
+    else await bot.reply(message, toSendContent(media, caption));
   }
   async sendTyping(userId: string): Promise<void> { const bot = await this.#getBot(); await bot.sendTyping(await this.#resolveUserId(bot, userId)); }
   async rememberUser(nativeUserId: string): Promise<void> { await (await this.#getBot()).storage.set("adapter_user_0", nativeUserId); }
@@ -148,13 +159,48 @@ export class SdkWeChatGateway implements WeChatGateway {
   }
 }
 
-function toSendContent(media: ResolvedMedia, caption?: string): Exclude<WeChatSendContent, string> {
+function toSendContent(media: MediaMetadata, caption?: string): Exclude<WeChatSendContent, string> {
   const data = Buffer.from(media.data);
-  if (media.artifact.kind === "image") return { image: data, ...(caption ? { caption } : {}) };
-  if (media.artifact.kind === "video") return { video: data, ...(caption ? { caption } : {}) };
-  return { file: data, fileName: media.artifact.fileName ?? `media-${media.artifact.id}${extensionForMime(media.artifact.mimeType)}`, ...(caption ? { caption } : {}) };
+  if (media.kind === "image") return { image: data, ...(caption ? { caption } : {}) };
+  if (media.kind === "video") return { video: data, ...(caption ? { caption } : {}) };
+  return { file: data, fileName: media.fileName ?? `media${extensionForMime(media.mimeType)}`, ...(caption ? { caption } : {}) };
+}
+
+/** Route audio through the SDK's low-level VOICE protocol instead of FILE. */
+export async function sendWeChatVoice(bot: SdkBot, userId: string, media: MediaMetadata, caption?: string): Promise<void> {
+  const uploaded = await bot.upload({ data: Buffer.from(media.data), userId, mediaType: 4 });
+  const builder = bot.createMessage(userId);
+  // MessageBuilder owns the conversation context token. Seed it, then remove
+  // the seed from the built payload when no caption was requested.
+  builder.text(caption || "\u200b");
+  const payload = builder.build();
+  const voiceItem = createVoiceItem(media, uploaded.media);
+  payload.item_list = caption ? [...payload.item_list, voiceItem] : [voiceItem];
+  await bot.sendRaw(payload);
+}
+
+export function createVoiceItem(media: MediaMetadata, cdnMedia: WeChatCdnMedia): WeChatWireItem {
+  const format = voiceFormat(media.mimeType);
+  return {
+    type: 3,
+    voice_item: {
+      media: cdnMedia,
+      encode_type: format.encodeType,
+      ...(format.bitsPerSample ? { bits_per_sample: format.bitsPerSample } : {}),
+      ...(format.sampleRate ? { sample_rate: format.sampleRate } : {}),
+      ...(media.durationMs ? { playtime: Math.round(media.durationMs) } : {}),
+    },
+  };
+}
+
+function voiceFormat(mimeType: string): { encodeType: number; bitsPerSample?: number; sampleRate?: number } {
+  if (mimeType === "audio/silk") return { encodeType: 6, bitsPerSample: 16, sampleRate: 24_000 };
+  if (mimeType === "audio/mpeg") return { encodeType: 7 };
+  if (mimeType === "audio/wav") return { encodeType: 1, bitsPerSample: 16 };
+  if (mimeType === "audio/ogg") return { encodeType: 8 };
+  throw new Error(`WeChat voice messages do not support ${mimeType}; use SILK, MP3, WAV, or OGG audio`);
 }
 
 function extensionForMime(mimeType: string): string {
-  return ({ "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/ogg": ".ogg", "audio/mp4": ".m4a" } as Record<string, string>)[mimeType] ?? ".bin";
+  return ({ "audio/silk": ".silk", "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/ogg": ".ogg" } as Record<string, string>)[mimeType] ?? ".bin";
 }

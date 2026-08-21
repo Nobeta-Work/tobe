@@ -26,12 +26,11 @@ import { MonthlyMessageLog, type MessageLogEntry } from "./message-log.ts";
 import { ActivePlugin, type ActiveLevel } from "./plugins/active.ts";
 import { RoomPlugin } from "./plugins/room.ts";
 import { likeUser, switchRoom } from "./scripts/switch-room.ts";
-import { getMedia, mediaErrorResult, parseMediaInput } from "../../../media/index.ts";
-import type { MediaService, ResolvedMedia } from "../../../media/type.ts";
+import type { MediaMetadata } from "../../../media/type.ts";
 import { uploadIIroseMedia } from "./scripts/upload-media.ts";
 import { sendIIroseAudioUrl } from "./scripts/send-audio.ts";
 
-export interface IIroseAdapterOptions { configPath?: string; config?: IIroseConfig; mediaService?: MediaService }
+export interface IIroseAdapterOptions { configPath?: string; config?: IIroseConfig }
 
 export class IIroseAdapter implements EnvAdapter {
   readonly id = randomUUID().replaceAll("-", "").slice(0, 10);
@@ -48,7 +47,6 @@ export class IIroseAdapter implements EnvAdapter {
   readonly #room: RoomPlugin;
   readonly #messageLog: MonthlyMessageLog;
   readonly #localResponses = new LocalResponseGuard();
-  readonly #mediaServiceOverride: MediaService | undefined;
   readonly #listeners = new Set<ObservationListener>();
   #health: AdapterHealth = { status: "stopped", since: Date.now() };
   #disposeListen: Unsubscribe | null = null;
@@ -67,7 +65,6 @@ export class IIroseAdapter implements EnvAdapter {
     this.#active = new ActivePlugin(this.#config.plugins.active);
     this.#room = new RoomPlugin(this.#config.plugins.room);
     this.#messageLog = new MonthlyMessageLog(this.#config.logging.directory);
-    this.#mediaServiceOverride = options.mediaService;
   }
 
   async start(): Promise<void> {
@@ -150,17 +147,15 @@ export class IIroseAdapter implements EnvAdapter {
         }
         case "send_media": {
           if (!this.#client.connected) throw new Error("IIROSE adapter is not connected");
-          const service = this.#mediaServiceOverride ?? getMedia();
-          if (!service) throw new Error("Media capability is not loaded");
-          const resolved = await service.resolve(parseMediaInput(interaction.args.media), {
-            kinds: ["image", "audio"], maxBytes: this.#config.media.maxBytes,
-          });
+          const media = requireMediaMetadata(interaction.args.media);
+          if (media.kind !== "image" && media.kind !== "audio") throw new Error(`IIROSE cannot send ${media.kind} media`);
+          if (media.size > this.#config.media.maxBytes) throw new Error(`IIROSE media exceeds ${this.#config.media.maxBytes} bytes`);
           const caption = interaction.args.caption;
           if (caption !== undefined && typeof caption !== "string") throw new Error("caption must be a string");
-          const uploaded = await uploadIIroseMedia(this.#config, resolved);
-          const delivery = await this.#sendUploadedMedia(resolved, uploaded.url, caption?.trim());
+          const uploaded = await uploadIIroseMedia(this.#config, media);
+          const delivery = await this.#sendUploadedMedia(media, uploaded.url, caption?.trim());
           return this.#result(interaction.call_id, interaction.action, {
-            status: "success", media: resolved.artifact, url: uploaded.url, delivery,
+            status: "success", media: publicMedia(media), url: uploaded.url, delivery,
           });
         }
         case "request_music": {
@@ -202,11 +197,7 @@ export class IIroseAdapter implements EnvAdapter {
           throw new Error(`Unsupported IIROSE action: ${interaction.action}`);
       }
     } catch (error) {
-      const mediaError = mediaErrorResult(error);
-      return this.#result(interaction.call_id, interaction.action,
-        mediaError.code !== "MEDIA_INTERNAL_ERROR"
-          ? mediaError
-          : { status: "error", message: error instanceof Error ? error.message : String(error) });
+      return this.#result(interaction.call_id, interaction.action, { status: "error", message: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -360,13 +351,13 @@ export class IIroseAdapter implements EnvAdapter {
     catch (error) { this.#setHealth("degraded", error instanceof Error ? error.message : String(error)); }
   }
 
-  async #sendUploadedMedia(media: ResolvedMedia, url: string, caption?: string): Promise<"image" | "audio_url"> {
-    if (media.artifact.kind === "image") {
+  async #sendUploadedMedia(media: MediaMetadata, url: string, caption?: string): Promise<"image" | "audio_url"> {
+    if (media.kind === "image") {
       const content = `${caption ? `${caption}\n` : ""}[${url}#e]`;
       await sendMessage(this.#client, this.#config, { content });
       return "image";
     }
-    if (media.artifact.kind !== "audio") throw new Error(`IIROSE cannot send ${media.artifact.kind} media`);
+    if (media.kind !== "audio") throw new Error(`IIROSE cannot send ${media.kind} media`);
     return sendIIroseAudioUrl(this.#client, this.#config, url);
   }
 
@@ -465,3 +456,17 @@ export class IIroseAdapter implements EnvAdapter {
 
 export function createAdapter(): EnvAdapter { return new IIroseAdapter(); }
 export default createAdapter;
+
+function requireMediaMetadata(value: unknown): MediaMetadata {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("media must be prepared by the Awareness Media Pipeline");
+  const media = value as Partial<MediaMetadata>;
+  if (!(media.data instanceof Uint8Array) || typeof media.kind !== "string" || typeof media.mimeType !== "string"
+    || typeof media.size !== "number" || typeof media.sha256 !== "string") {
+    throw new Error("media must be prepared by the Awareness Media Pipeline");
+  }
+  return media as MediaMetadata;
+}
+
+function publicMedia(media: MediaMetadata) {
+  return { kind: media.kind, mimeType: media.mimeType, size: media.size, sha256: media.sha256 };
+}

@@ -6,7 +6,7 @@ export const MUSIC_ACTIONS: readonly AdapterActionDefinition[] = [
   {
     action: "request_music",
     mode: "interact",
-    description: "按歌名搜索并在当前 IIROSE 房间点播第一首结果。",
+    description: "Search by song name and play the first result in the current IIROSE room.",
     parameters: { name: "non-empty song name, required" },
   },
 ];

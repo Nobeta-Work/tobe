@@ -3,7 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { AgentHost } from "./agent/host.ts";
-import { hashPassword, loadWebConfig, saveWebConfig, type WebConfig } from "./lib/config.ts";
+import { hashPassword, isThinkingLevel, loadWebConfig, saveWebConfig, type WebConfig } from "./lib/config.ts";
 import { PUBLIC_DIR } from "./lib/paths.ts";
 import { HttpError } from "./lib/schema-config.ts";
 import { AccessControl, isValidIpRule } from "./lib/security.ts";
@@ -73,7 +73,10 @@ async function handleApi(request: IncomingMessage, response: ServerResponse, url
   if (request.method === "PUT" && (url.pathname === "/api/settings" || url.pathname === "/api/access")) {
     const body = await readJson(request) as {
       passwordEnabled?: unknown; password?: unknown; allowedIps?: unknown;
-      customProvider?: { enabled?: unknown; baseUrl?: unknown; apiKey?: unknown; model?: unknown };
+      customProvider?: {
+        enabled?: unknown; baseUrl?: unknown; apiKey?: unknown; model?: unknown;
+        temperature?: unknown; maxTokens?: unknown; contextLimit?: unknown; thinkingLevel?: unknown;
+      };
     };
     let providerChanged = false;
     const passwordEnabled = body.passwordEnabled === true;
@@ -95,8 +98,14 @@ async function handleApi(request: IncomingMessage, response: ServerResponse, url
       const baseUrl = typeof provider.baseUrl === "string" ? normalizeProviderUrl(provider.baseUrl) : next.customProvider.baseUrl;
       const model = typeof provider.model === "string" ? provider.model.trim() : next.customProvider.model;
       const apiKey = typeof provider.apiKey === "string" && provider.apiKey ? provider.apiKey : next.customProvider.apiKey;
+      const temperature = numberInRange(provider.temperature, next.customProvider.temperature, 0, 2, "Temperature");
+      const maxTokens = positiveInteger(provider.maxTokens, next.customProvider.maxTokens, "Max tokens");
+      const contextLimit = positiveInteger(provider.contextLimit, next.customProvider.contextLimit, "Context limit");
+      const thinkingLevel = provider.thinkingLevel === undefined ? next.customProvider.thinkingLevel : provider.thinkingLevel;
+      if (!isThinkingLevel(thinkingLevel)) throw new HttpError(400, "Thinking level 无效");
+      if (maxTokens > contextLimit) throw new HttpError(400, "Max tokens 不能大于 Context limit");
       if (enabled && (!baseUrl || !model || !apiKey)) throw new HttpError(400, "启用自定义 Provider 时必须填写 Base URL、Key 和 Model");
-      const customProvider = { enabled, baseUrl, model, apiKey };
+      const customProvider = { enabled, baseUrl, model, apiKey, temperature, maxTokens, contextLimit, thinkingLevel };
       providerChanged = JSON.stringify(customProvider) !== JSON.stringify(next.customProvider);
       next = { ...next, customProvider };
     }
@@ -261,6 +270,24 @@ function publicProvider(value: WebConfig): Record<string, unknown> {
     enabled: value.customProvider.enabled,
     baseUrl: value.customProvider.baseUrl,
     model: value.customProvider.model,
+    temperature: value.customProvider.temperature,
+    maxTokens: value.customProvider.maxTokens,
+    contextLimit: value.customProvider.contextLimit,
+    thinkingLevel: value.customProvider.thinkingLevel,
     hasKey: Boolean(value.customProvider.apiKey),
   };
+}
+
+function numberInRange(value: unknown, fallback: number, minimum: number, maximum: number, label: string): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < minimum || value > maximum) {
+    throw new HttpError(400, `${label} 必须在 ${minimum} 到 ${maximum} 之间`);
+  }
+  return value;
+}
+
+function positiveInteger(value: unknown, fallback: number, label: string): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) throw new HttpError(400, `${label} 必须是正整数`);
+  return value;
 }

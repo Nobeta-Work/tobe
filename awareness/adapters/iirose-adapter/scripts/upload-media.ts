@@ -1,4 +1,4 @@
-import type { ResolvedMedia } from "../../../../media/type.ts";
+import type { MediaMetadata } from "../../../../media/type.ts";
 import type { IIroseConfig } from "../config.ts";
 
 export interface UploadedIIroseMedia {
@@ -9,7 +9,7 @@ export interface UploadedIIroseMedia {
 /** Upload Media bytes through IIROSE's first-party multipart endpoint. */
 export async function uploadIIroseMedia(
   config: IIroseConfig,
-  media: ResolvedMedia,
+  media: MediaMetadata,
   fetchImpl: typeof fetch = fetch,
 ): Promise<UploadedIIroseMedia> {
   if (!config.credentials.uid) throw new Error("credentials.uid is required for IIROSE media upload");
@@ -24,8 +24,8 @@ export async function uploadIIroseMedia(
   form.set("i", config.credentials.uid);
   form.append(
     "f[]",
-    new Blob([bytes], { type: media.artifact.mimeType }),
-    media.artifact.fileName ?? defaultFileName(media.artifact.kind, media.artifact.mimeType),
+    new Blob([bytes], { type: media.mimeType }),
+    media.fileName ?? defaultFileName(media.kind, media.mimeType),
   );
   const response = await fetchImpl(config.media.uploadEndpoint, {
     method: "POST",
@@ -35,7 +35,7 @@ export async function uploadIIroseMedia(
   });
   if (!response.ok) throw new Error(`IIROSE media upload failed with HTTP ${response.status}`);
   const path = (await response.text()).trim().replace(/^\/+/, "");
-  if (!isSafeUploadPath(path, media.artifact.kind)) {
+  if (!isSafeUploadPath(path, media.kind)) {
     throw new Error(`IIROSE media upload returned an invalid path: ${path.slice(0, 120)}`);
   }
   return { path, url: new URL(path, ensureTrailingSlash(config.media.publicBaseUrl)).toString() };

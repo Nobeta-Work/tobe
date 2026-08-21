@@ -6,7 +6,7 @@ import { registerMediaTools } from "./tools/index.ts";
 import type { MediaService } from "./type.ts";
 
 export * from "./type.ts";
-export { Media, mediaErrorResult, parseMediaInput } from "./media.ts";
+export { Media, isMediaMetadata, isMediaRef, mediaErrorResult, parseMediaRef } from "./media.ts";
 
 const MEDIA_SLOT = Symbol.for("@nobeta-work/tobe/media-service/v1");
 

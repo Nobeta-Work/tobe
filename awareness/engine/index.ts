@@ -2,11 +2,12 @@ import type {
   AdapterActionDefinition,
   AdapterLoader,
   AwarenessEngine,
+  AwarenessPipeline,
   EnvAdapter,
   ObservationListener,
   RegisteredAdapter,
   Unsubscribe,
-} from "./adapter.ts";
+} from "../adapter.ts";
 import type {
   AdapterCallResult,
   EngineConfig,
@@ -15,7 +16,7 @@ import type {
   Observation,
   PermissionDeclaration,
   ObserveRequest,
-} from "./type.ts";
+} from "../type.ts";
 
 const ENGINE_ADAPTER_ID = "awareness-engine";
 const DEFAULT_CONFIG: EngineConfig = {
@@ -31,6 +32,7 @@ interface BufferedObservation { observation: Observation; count: number }
 export class AwarenessEngineImpl implements AwarenessEngine {
   readonly #config: EngineConfig;
   readonly #loadAdapter: AdapterLoader | undefined;
+  readonly #pipeline: AwarenessPipeline | undefined;
   readonly #adapters = new Map<string, EnvAdapter>();
   readonly #subscriptions = new Map<string, Unsubscribe>();
   readonly #listeners = new Set<ObservationListener>();
@@ -38,9 +40,10 @@ export class AwarenessEngineImpl implements AwarenessEngine {
   readonly #timers = new Map<string, ReturnType<typeof setTimeout>>();
   readonly #ready: Observation[] = [];
 
-  constructor(config: Partial<EngineConfig> = {}, loadAdapter?: AdapterLoader) {
+  constructor(config: Partial<EngineConfig> = {}, loadAdapter?: AdapterLoader, pipeline?: AwarenessPipeline) {
     this.#config = { ...DEFAULT_CONFIG, ...config };
     this.#loadAdapter = loadAdapter;
+    this.#pipeline = pipeline;
   }
 
   register(adapter: EnvAdapter): void {
@@ -49,7 +52,10 @@ export class AwarenessEngineImpl implements AwarenessEngine {
       throw new Error(`Duplicate adapter name: ${adapter.name}`);
     }
     this.#adapters.set(adapter.id, adapter);
-    this.#subscriptions.set(adapter.id, adapter.subscribe((event) => this.#accept(event)));
+    this.#subscriptions.set(adapter.id, adapter.subscribe(async (event) => {
+      const observation = this.#pipeline ? await this.#pipeline.inbound(event) : event;
+      await this.#accept(observation);
+    }));
   }
 
   async unregister(adapter_id: string): Promise<void> {
@@ -79,7 +85,8 @@ export class AwarenessEngineImpl implements AwarenessEngine {
     const adapter = this.#adapters.get(interaction.adapter_id);
     if (!adapter) return this.#failure(interaction, `Unknown adapter_id: ${interaction.adapter_id}`);
     try {
-      return await adapter.interact(interaction);
+      const prepared = this.#pipeline ? await this.#pipeline.outbound(interaction) : interaction;
+      return await adapter.interact(prepared);
     } catch (error) {
       return this.#failure(interaction, error instanceof Error ? error.message : String(error));
     }
@@ -241,21 +248,21 @@ export function permissionDeclaration(trust: Observation["trust"]): PermissionDe
   if (trust === "low" || trust === "off") return {
     workspaceWrite: false,
     allowedToolClasses: ["response", "retrieval_media"],
-    instruction: "该来源不具备写权限，也不得调用除检索型媒体外的工具；直接返回消息。",
+    instruction: "This source has no write access. Do not call tools except retrieval-only media tools; respond with a message.",
   };
   if (trust === "medium") return {
     workspaceWrite: false,
     allowedToolClasses: ["response", "retrieval_media", "generative_media", "channel"],
-    instruction: "该来源不具备写权限；允许生成型媒体、检索型媒体及相关通道工具。",
+    instruction: "This source has no workspace write access. Generative media, retrieval media, and relevant channel tools are allowed.",
   };
   return {
     workspaceWrite: true,
     allowedToolClasses: ["response", "retrieval_media", "generative_media", "channel", "workspace"],
-    instruction: "该来源允许工作区内写操作，并可使用相关工具。",
+    instruction: "This source may write within the workspace and use relevant tools.",
   };
 }
 
 export const ENGINE_OBSERVE_ACTIONS: readonly AdapterActionDefinition[] = [
-  { action: "list_adapters", mode: "observe", description: "列出已扫描注册的 adapters、运行时 ID、健康状态和动作。", parameters: {} },
-  { action: "drain", mode: "observe", description: "取出 Engine 已完成 attention 处理的 observations。", parameters: { limit: "positive integer, optional" } },
+  { action: "list_adapters", mode: "observe", description: "List registered adapters with runtime IDs, health, and actions.", parameters: {} },
+  { action: "drain", mode: "observe", description: "Read observations that have completed attention processing.", parameters: { limit: "positive integer, optional" } },
 ];

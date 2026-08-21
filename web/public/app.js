@@ -2,12 +2,14 @@ const state = {
   bootstrap: null, agent: null, messages: [], liveMessage: null,
   selectedAdapter: null, adapterData: null, mediaData: null, mediaLoading: false, selectedMemory: null,
   eventSource: null, refreshTimer: null, dialogQueue: [], activeDialog: null,
-  extensionStatuses: new Map(), widgets: new Map(), liveRenderPending: false,
+  extensionStatuses: new Map(), widgets: new Map(), liveRenderTimer: null,
   commandMatches: [], activeCommandIndex: 0,
+  modelActivity: "",
 };
 
 const views = {
   chat: ["SESSION / TOBE", "长期会话"],
+  model: ["MAIN MODEL", "主模型"],
   adapters: ["AWARENESS", "Adapter 配置"],
   media: ["MEDIA", "Media 配置"],
   memory: ["PERSISTENT COGNITION", "记忆审查"],
@@ -21,6 +23,7 @@ document.querySelector("#agent-toggle").addEventListener("click", toggleAgent);
 document.querySelector("#agent-abort").addEventListener("click", () => api("/api/agent/abort", { method: "POST" }).catch(showError));
 document.querySelector("#composer").addEventListener("submit", sendPrompt);
 document.querySelector("#settings-form").addEventListener("submit", saveSettings);
+document.querySelector("#model-form").addEventListener("submit", saveModel);
 document.querySelector("#password-enabled").addEventListener("change", updateSettingsAvailability);
 document.querySelector("#provider-enabled").addEventListener("change", updateSettingsAvailability);
 document.querySelector("#rpc-dialog-form").addEventListener("submit", submitRpcDialog);
@@ -103,6 +106,13 @@ function connectEvents() {
       renderAgent();
       return;
     }
+    if (envelope.type === "agent.context_cleared") {
+      state.messages = [];
+      state.liveMessage = null;
+      renderMessages();
+      showToast("上下文已清空，仍保持 tobe 会话名称");
+      return;
+    }
     if (envelope.type !== "agent.event") return;
     const data = envelope.data || {};
     if (data.type === "message_start" || data.type === "message_update") {
@@ -114,6 +124,19 @@ function connectEvents() {
     if (data.type === "message_end" || data.type === "agent_end") {
       state.liveMessage = null;
       scheduleMessageRefresh();
+    }
+    if (data.type === "auto_retry_start") {
+      state.modelActivity = `模型请求失败，正在重试 ${data.attempt}/${data.maxAttempts}`;
+      renderMetrics();
+    }
+    if (data.type === "auto_retry_end") {
+      state.modelActivity = "";
+      renderMetrics();
+      if (!data.success) showToast(data.finalError || "模型 API 请求失败", true);
+    }
+    if (data.type === "agent_end" && !data.willRetry) {
+      const failure = latestModelError(data.messages);
+      if (failure) showToast(failure, true);
     }
     if (data.type === "extension_ui_request") handleExtensionUi(data);
     if (data.type === "extension_error") showToast(data.error || "Extension 执行失败", true);
@@ -130,7 +153,11 @@ function renderAgent() {
     running: streaming ? "Agent 正在回应" : "Agent 已连接",
     recovering: "Agent 恢复中",
   };
-  setStatus(agent.error && agent.processState === "recovering" ? "error" : streaming ? "busy" : agent.processState, labels[agent.processState] || "状态未知");
+  setStatus(agent.error ? "error" : streaming ? "busy" : agent.processState, agent.error ? "Agent 启动失败" : labels[agent.processState] || "状态未知");
+  const errorPanel = document.querySelector("#agent-error");
+  errorPanel.hidden = !agent.error;
+  document.querySelector("#agent-error-summary").textContent = agent.error || "";
+  document.querySelector("#agent-error-details").textContent = agent.diagnostics || agent.error || "没有收到 Pi 的详细输出。";
   const toggle = document.querySelector("#agent-toggle");
   const running = agent.desiredRunning || agent.processState !== "stopped";
   toggle.textContent = running ? "停止 Agent" : "运行 Agent";
@@ -158,7 +185,7 @@ function renderMetrics() {
   const rawModelLabel = typeof model === "string" ? model : [model.provider, model.id].filter(Boolean).join("/") || session.modelId || "";
   const modelLabel = !rawModelLabel || rawModelLabel === "unknown/unknown" || rawModelLabel === "unknown" ? "未选择模型" : rawModelLabel;
   const streaming = Boolean(session.isStreaming);
-  const extraStatus = [...state.extensionStatuses.values()].filter(Boolean)[0];
+  const extraStatus = state.modelActivity || [...state.extensionStatuses.values()].filter(Boolean)[0];
   document.querySelector("#metric-model").textContent = modelLabel;
   document.querySelector("#metric-state").textContent = extraStatus || (agent.processState === "stopped" ? "已停止" : streaming ? "生成中" : "窗口空闲");
   document.querySelector("#metric-tokens").textContent = `${formatTokens(stats.tokens?.total || 0)} tokens`;
@@ -314,17 +341,18 @@ function commandSourceLabel(source) {
 }
 
 function scheduleMessageRefresh() {
+  clearTimeout(state.liveRenderTimer);
+  state.liveRenderTimer = null;
   clearTimeout(state.refreshTimer);
   state.refreshTimer = setTimeout(() => refreshMessages().catch(showError), 140);
 }
 
 function scheduleLiveRender() {
-  if (state.liveRenderPending) return;
-  state.liveRenderPending = true;
-  requestAnimationFrame(() => {
-    state.liveRenderPending = false;
-    renderMessages();
-  });
+  if (state.liveRenderTimer) return;
+  state.liveRenderTimer = setTimeout(() => {
+    state.liveRenderTimer = null;
+    requestAnimationFrame(renderLiveMessage);
+  }, 40);
 }
 
 async function refreshMessages() {
@@ -335,6 +363,7 @@ async function refreshMessages() {
 
 function renderMessages() {
   const container = document.querySelector("#messages");
+  const stickToBottom = isNearMessageBottom(container);
   const visible = state.messages.filter(isVisibleMessage);
   if (state.liveMessage && !visible.some((message) => sameMessage(message, state.liveMessage))) visible.push(state.liveMessage);
   if (!visible.length) {
@@ -342,7 +371,25 @@ function renderMessages() {
     return;
   }
   container.replaceChildren(...visible.map((message) => renderMessage(message, message === state.liveMessage)));
-  container.scrollTop = container.scrollHeight;
+  if (stickToBottom) container.scrollTop = container.scrollHeight;
+}
+
+function renderLiveMessage() {
+  if (!state.liveMessage) return;
+  const container = document.querySelector("#messages");
+  const stickToBottom = isNearMessageBottom(container);
+  const next = renderMessage(state.liveMessage, true);
+  const current = container.querySelector('[data-live-message="true"]');
+  if (current) current.replaceWith(next);
+  else {
+    container.querySelector(".empty-state")?.remove();
+    container.append(next);
+  }
+  if (stickToBottom) container.scrollTop = container.scrollHeight;
+}
+
+function isNearMessageBottom(container) {
+  return container.scrollHeight - container.scrollTop - container.clientHeight < 120;
 }
 
 function isVisibleMessage(message) {
@@ -357,6 +404,7 @@ function sameMessage(left, right) {
 function renderMessage(message, live) {
   const role = message.role === "toolResult" ? "tool" : message.role;
   const item = element("article", `message ${role}`);
+  if (live) item.dataset.liveMessage = "true";
   const label = message.role === "user" ? "YOU" : message.role === "assistant" ? "TOBE" : message.toolName ? `TOOL / ${message.toolName}` : "SYSTEM";
   item.append(element("div", "message-label", label));
   const body = element("div", "message-body");
@@ -366,6 +414,12 @@ function renderMessage(message, live) {
   } else {
     for (const part of parts) body.append(renderContentPart(part, live));
   }
+  if (message.role === "assistant" && message.stopReason === "error") {
+    const failure = element("section", "model-api-error");
+    failure.append(element("strong", "", "模型 API 请求失败"));
+    failure.append(element("div", "", message.errorMessage || "Provider 返回了未知错误。"));
+    body.append(failure);
+  }
   if (!body.childNodes.length) body.append(element("div", "working-line", live ? "思考中…" : "此消息没有可展示的文本内容"));
   item.append(body);
   if (message.role === "assistant" && message.usage) {
@@ -373,6 +427,13 @@ function renderMessage(message, live) {
     item.append(element("div", "message-meta", `${formatTokens((usage.input || 0) + (usage.output || 0) + (usage.cacheRead || 0) + (usage.cacheWrite || 0))} tokens`));
   }
   return item;
+}
+
+function latestModelError(messages) {
+  if (!Array.isArray(messages)) return "";
+  const latest = [...messages].reverse().find((message) => message?.role === "assistant");
+  if (latest?.stopReason !== "error") return "";
+  return latest.errorMessage || "模型 API 请求失败";
 }
 
 function renderContentPart(part, live) {
@@ -719,6 +780,10 @@ function renderSettings() {
   document.querySelector("#provider-key").value = "";
   document.querySelector("#provider-key").placeholder = provider.hasKey ? "已设置，留空则保持不变" : "未设置";
   document.querySelector("#provider-model").value = provider.model || "";
+  document.querySelector("#provider-temperature").value = provider.temperature ?? 1;
+  document.querySelector("#provider-max-tokens").value = provider.maxTokens ?? 16384;
+  document.querySelector("#provider-context-limit").value = provider.contextLimit ?? 128000;
+  document.querySelector("#provider-thinking").value = provider.thinkingLevel || "off";
   updateSettingsAvailability();
 }
 
@@ -727,12 +792,21 @@ function updateSettingsAvailability() {
   document.querySelector("#access-password").disabled = !passwordEnabled;
   document.querySelector("#password-field").classList.toggle("disabled-field", !passwordEnabled);
   const providerEnabled = document.querySelector("#provider-enabled").checked;
-  document.querySelectorAll("#provider-fields input").forEach((input) => { input.disabled = !providerEnabled; });
+  document.querySelectorAll("#provider-fields input, #provider-fields select").forEach((input) => { input.disabled = !providerEnabled; });
   document.querySelector("#provider-fields").classList.toggle("disabled-field", !providerEnabled);
 }
 
 async function saveSettings(event) {
   event.preventDefault();
+  await persistSettings(event.currentTarget);
+}
+
+async function saveModel(event) {
+  event.preventDefault();
+  await persistSettings(event.currentTarget);
+}
+
+async function persistSettings(form) {
   const passwordEnabled = document.querySelector("#password-enabled").checked;
   const password = document.querySelector("#access-password").value;
   const allowedIps = document.querySelector("#allowed-ips").value.split(/[\n,]+/).map((value) => value.trim()).filter(Boolean);
@@ -741,13 +815,17 @@ async function saveSettings(event) {
     baseUrl: document.querySelector("#provider-base-url").value,
     apiKey: document.querySelector("#provider-key").value,
     model: document.querySelector("#provider-model").value,
+    temperature: Number(document.querySelector("#provider-temperature").value),
+    maxTokens: Number(document.querySelector("#provider-max-tokens").value),
+    contextLimit: Number(document.querySelector("#provider-context-limit").value),
+    thinkingLevel: document.querySelector("#provider-thinking").value,
   };
   try {
     const settings = await api("/api/settings", { method: "PUT", body: { passwordEnabled, password, allowedIps, customProvider } });
     state.bootstrap.settings = settings;
     document.querySelector("#logout").hidden = !settings.passwordEnabled;
     renderSettings();
-    showToast(settings.requiresAgentRestart ? "设置已保存；请停止并重新运行 Agent 以应用 Provider" : "设置已保存");
+    showToast(settings.requiresAgentRestart ? "设置已保存；请停止并重新运行 Agent 以应用主模型" : form.id === "model-form" ? "主模型已保存" : "访问设置已保存");
   } catch (error) { showError(error); }
 }
 

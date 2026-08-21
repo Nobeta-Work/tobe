@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.pi/agent/
 
 tmp/
 logs/
@@ -21,3 +22,7 @@ memory/view/USER.md
 memory/logs/
 memory/skills/active/
 memory/skills/candidates/
+
+# Version Dev
+docs/*/GUIDE.md
+docs/*/TASK.md

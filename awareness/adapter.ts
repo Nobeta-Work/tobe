@@ -17,6 +17,12 @@ export interface AdapterHealth {
 export type ObservationListener = (observation: Observation) => void | Promise<void>;
 export type Unsubscribe = () => void;
 
+/** Generic Engine boundary hook. Implementations may normalize capabilities without changing Engine routing semantics. */
+export interface AwarenessPipeline {
+  inbound(observation: Observation): Promise<Observation>;
+  outbound(interaction: Interaction): Promise<Interaction>;
+}
+
 export interface AdapterActionDefinition {
   action: string;
   mode: "observe" | "interact";

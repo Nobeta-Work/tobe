@@ -2,14 +2,17 @@ import { access, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { getMedia } from "../media/index.ts";
 import type { AdapterFactory, AwarenessEngine, EnvAdapter, Unsubscribe } from "./adapter.ts";
-import { AwarenessEngineImpl } from "./engine.ts";
+import { AwarenessEngineImpl } from "./engine/index.ts";
+import { MediaPipeline } from "./engine/media-pipeline.ts";
 import { registerAwarenessTools } from "./tools/index.ts";
 import type { Observation } from "./type.ts";
 
 export * from "./type.ts";
 export * from "./adapter.ts";
-export { AwarenessEngineImpl } from "./engine.ts";
+export { AwarenessEngineImpl } from "./engine/index.ts";
+export { MediaPipeline } from "./engine/media-pipeline.ts";
 
 interface AdapterModule {
   createAdapter?: AdapterFactory;
@@ -84,7 +87,7 @@ export function pushObservation(pi: ExtensionAPI, observation: Observation): voi
 
 /** Pi extension 入口。Pi 负责调用；import 本文件本身不会启动网络连接。 */
 export default async function awarenessExtension(pi: ExtensionAPI): Promise<void> {
-  const engine = new AwarenessEngineImpl({}, (adapterName) => loadAdapter(adapterName));
+  const engine = new AwarenessEngineImpl({}, (adapterName) => loadAdapter(adapterName), new MediaPipeline(getMedia));
   const adapters = await discoverAdapters();
   for (const adapter of adapters) engine.register(adapter);
 

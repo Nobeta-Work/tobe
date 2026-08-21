@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { permissionDeclaration } from "../../engine.ts";
+import { permissionDeclaration } from "../../engine/index.ts";
 import { ParticipationClassifier, directlyAddressesBot } from "./classifier.ts";
 import { MonthlyMessageLog, type MessageLogEntry } from "./message-log.ts";
 import { ActivePlugin } from "./plugins/active.ts";
@@ -69,10 +69,7 @@ test("official IIROSE upload uses uid/i and f[] then joins the returned path", a
     },
   } as IIroseConfig;
   const uploaded = await uploadIIroseMedia(config, {
-    artifact: {
-      version: 1, id: "image:123456789abc", kind: "image", mimeType: "image/png",
-      fileName: "test.png", size: 4, sha256: "x", origin: { type: "generated" },
-    },
+    kind: "image", mimeType: "image/png", fileName: "test.png", size: 4, sha256: "x",
     data: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
   }, fetchMock);
   assert.equal(uploaded.url, "http://r.iirose.com/i/26/8/16/6/4317-RI.png");
@@ -91,10 +88,8 @@ test("official IIROSE upload accepts the m/ path returned for audio", async () =
     },
   } as IIroseConfig;
   const uploaded = await uploadIIroseMedia(config, {
-    artifact: {
-      version: 1, id: "audio:123456789abc", kind: "audio", mimeType: "audio/wav",
-      fileName: "test.wav", size: 4, sha256: "x", origin: { type: "generated" },
-    }, data: new Uint8Array([0x52, 0x49, 0x46, 0x46]),
+    kind: "audio", mimeType: "audio/wav", fileName: "test.wav", size: 4, sha256: "x",
+    data: new Uint8Array([0x52, 0x49, 0x46, 0x46]),
   }, async () => new Response("m/26/8/16/6/5132-LW.wav", { status: 200 }));
   assert.equal(uploaded.url, "http://r.iirose.com/m/26/8/16/6/5132-LW.wav");
 });

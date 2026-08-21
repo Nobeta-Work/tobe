@@ -2,7 +2,7 @@ export type MediaKind = "image" | "audio" | "video" | "file";
 export type RecognizableMediaKind = "image" | "audio";
 export type GeneratableMediaKind = "image" | "audio";
 
-/** Adapter 已完成平台下载/解密后的 Media 标准输入。 */
+/** Raw or platform-normalized media. This value never enters Agent context. */
 export interface MediaData {
   kind: MediaKind;
   mimeType: string;
@@ -10,48 +10,56 @@ export interface MediaData {
   fileName?: string;
 }
 
-/** 可安全写入 Observation 或 Tool Result 的媒体描述，不包含二进制和路径。 */
-export interface MediaArtifact {
-  version: 1;
-  id: string;
-  kind: MediaKind;
-  mimeType: string;
-  fileName?: string;
+/** Internal Adapter <-> Media Pipeline envelope. It must never be serialized to an Agent. */
+export interface MediaMetadata extends MediaData {
   size: number;
   sha256: string;
   width?: number;
   height?: number;
   durationMs?: number;
-  origin: {
-    type: "generated" | "library" | "imported";
-    provider?: string;
-    category?: string;
-    tag?: string;
-  };
 }
 
-export interface MediaRecognition {
-  media: Omit<MediaArtifact, "id" | "origin"> & {
-    origin: { type: "imported" };
-  };
-  text: string;
-  provider: string;
-}
-
-export interface MediaLibraryInput {
-  source: "library";
+interface MediaRefBase {
+  type: "media_ref";
   kind: MediaKind;
+  description: string;
+}
+
+export interface ArtifactMediaRef extends MediaRefBase {
+  source: "artifact";
+  /** The 12-character YYYYMMDD-??- key, without the kind prefix. */
+  id: string;
+}
+
+export interface LibraryMediaRef extends MediaRefBase {
+  source: "library";
   category: string;
   tag: string;
-  selection?: "random" | "best";
 }
 
-export interface MediaArtifactInput {
-  source: "artifact";
-  mediaId: string;
+/** The only media value allowed in Engine <-> Agent context. */
+export type MediaRef = ArtifactMediaRef | LibraryMediaRef;
+
+/** Explicit local-file input accepted by media_analyze. */
+export interface MediaFileInput {
+  type: "file";
+  path: string;
+  kind?: RecognizableMediaKind;
 }
 
-export type MediaInput = MediaLibraryInput | MediaArtifactInput;
+export type MediaAnalyzeToolInput = MediaRef | MediaFileInput;
+export type MediaAnalyzeInput = MediaRef | MediaData;
+
+export interface MediaAnalyzeRequest {
+  prompt?: string;
+  inputs: readonly MediaAnalyzeInput[];
+}
+
+export interface MediaAnalysis {
+  description: string;
+  provider: string;
+  inputCount: number;
+}
 
 export interface MediaConstraints {
   kinds?: readonly MediaKind[];
@@ -59,11 +67,6 @@ export interface MediaConstraints {
   maxBytes?: number;
   image?: { allowAnimated?: boolean; maxWidth?: number; maxHeight?: number };
   audio?: { maxDurationMs?: number };
-}
-
-export interface ResolvedMedia {
-  artifact: MediaArtifact;
-  data: Uint8Array;
 }
 
 export interface MediaListRequest {
@@ -77,7 +80,16 @@ export interface MediaLibraryIndex {
 
 export interface MediaGenerateRequest {
   kind: GeneratableMediaKind;
-  text: string;
+  prompt?: string;
+  references?: readonly MediaRef[];
+  options?: Readonly<Record<string, unknown>>;
+}
+
+/** Provider-facing request after MediaRefs have been resolved. */
+export interface MediaModelGenerateRequest {
+  kind: GeneratableMediaKind;
+  prompt: string;
+  references: readonly MediaData[];
   options?: Readonly<Record<string, unknown>>;
 }
 
@@ -88,14 +100,14 @@ export interface GeneratedMedia extends MediaData {
 
 export interface MediaModels {
   readonly id: string;
-  recognize(input: MediaData, signal?: AbortSignal): Promise<string>;
-  generate(request: MediaGenerateRequest, signal?: AbortSignal): Promise<GeneratedMedia>;
-  canRecognize(kind: MediaKind): boolean;
+  analyze(inputs: readonly MediaData[], prompt: string, signal?: AbortSignal): Promise<string>;
+  generate(request: MediaModelGenerateRequest, signal?: AbortSignal): Promise<GeneratedMedia>;
+  canAnalyze(kind: MediaKind): boolean;
   canGenerate(kind: MediaKind): boolean;
 }
 
 export interface MediaServiceStatus {
-  recognition: Record<RecognizableMediaKind, boolean>;
+  analysis: Record<RecognizableMediaKind, boolean>;
   generation: Record<GeneratableMediaKind, boolean>;
   libraryKinds: MediaKind[];
 }
@@ -103,10 +115,10 @@ export interface MediaServiceStatus {
 export interface MediaService {
   status(): Promise<MediaServiceStatus>;
   list(request: MediaListRequest): Promise<MediaLibraryIndex>;
-  recognize(input: MediaData, signal?: AbortSignal): Promise<MediaRecognition>;
-  generate(request: MediaGenerateRequest, signal?: AbortSignal): Promise<MediaArtifact>;
-  resolve(input: MediaInput, constraints?: MediaConstraints): Promise<ResolvedMedia>;
-  inspect(mediaId: string): Promise<MediaArtifact | undefined>;
+  import(input: MediaData, description?: string): Promise<ArtifactMediaRef>;
+  analyze(request: MediaAnalyzeRequest, signal?: AbortSignal): Promise<MediaAnalysis>;
+  generate(request: MediaGenerateRequest, signal?: AbortSignal): Promise<ArtifactMediaRef>;
+  resolve(ref: MediaRef, constraints?: MediaConstraints): Promise<MediaMetadata>;
 }
 
 export type MediaErrorCode =

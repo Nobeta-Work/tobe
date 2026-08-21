@@ -10,6 +10,8 @@ Pi Agent
   ├── awareness_interact ──┤
   └── awareness_engine ────┤
                           ▼
+                    Media Pipeline
+                          ▼
                     Awareness Engine
                           ▼ adapter_id
                 dynamically scanned Adapter
@@ -21,6 +23,7 @@ Pi Agent
 - Pi 暴露三个稳定工具：`awareness_observe` 负责 Adapter/Engine 只读观察，`awareness_interact` 只负责 Adapter 写操作，`awareness_engine` 只负责 Adapter 生命周期管理。
 - Adapter 的环境动作仍然收敛在 observe/interact 的 `action + args` 下，不会为每个 Adapter 增加全局工具。
 - Engine 只认识通用 `Observation` 信封。房间、消息、设备等字段全部属于具体 Adapter 的 `content`。
+- Media Pipeline 属于 Engine 层但与路由核心隔离。入站将 Adapter 的 `MediaMetadata` 存储、分析并替换为 `MediaRef`；出站在调用 Adapter 前把 `args.media` 的 `MediaRef` 解析回内部元数据。
 - `trust` 表示来源参与程度，不证明正文为事实，也不会把环境文本提升成系统指令；身份字段必须按对应 Adapter 的 Skill 解释。
 - `adapter_id` 在扫描注册时生成，在当前 extension runtime 内唯一且稳定；不以是否已登录为条件。
 - Engine 的 `subscribe()` 会由 extension 桥接到 `pi.sendMessage`，不是等待 Agent 调用 `drain` 的轮询接口。
@@ -63,7 +66,9 @@ awareness/
 ├── index.ts       # Pi extension 入口、Adapter 扫描与主动消息推送
 ├── adapter.ts     # 全局 Adapter/Engine 类型
 ├── type.ts        # 环境无关数据与 function-call 信封
-├── engine.ts      # 感知聚合、缓冲与路由引擎
+├── engine/
+│   ├── index.ts           # 感知聚合、缓冲与路由引擎
+│   └── media-pipeline.ts  # 入站分析与出站解析
 ├── tools/         # awareness_observe / awareness_interact / awareness_engine
 └── adapters/      # 环境个性化实现
 ```

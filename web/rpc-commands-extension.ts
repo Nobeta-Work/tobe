@@ -77,8 +77,16 @@ async function login(
 }
 
 export default function rpcCommandsExtension(pi: ExtensionAPI): void {
+  pi.registerCommand("clear", {
+    description: "Start a fresh context while keeping the session name tobe",
+    handler: async (_args, ctx) => {
+      const result = await ctx.newSession();
+      if (!result.cancelled) pi.setSessionName("tobe");
+    },
+  });
+
   pi.registerCommand("login", {
-    description: "在 Web 中配置 Provider 认证",
+    description: "Configure Provider authentication from the Web console",
     handler: async (args, ctx) => {
       const runtime = await getAuthRuntime(ctx);
       const oauthProviders = runtime.getProviders().filter((provider) => provider.auth.oauth);
@@ -113,7 +121,7 @@ export default function rpcCommandsExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("logout", {
-    description: "移除 Web 中选择的 Provider 认证",
+    description: "Remove stored Provider authentication from the Web console",
     handler: async (args, ctx) => {
       const runtime = await getAuthRuntime(ctx);
       const stored = (await runtime.listCredentials()).map((credential) => credential.providerId).sort();

@@ -74,6 +74,7 @@
             "enabled": { "type": "boolean", "title": "启用图片生成" },
             "baseUrl": { "type": "string", "title": "Base URL" },
             "endpoint": { "type": "string", "minLength": 1, "title": "Endpoint" },
+            "referenceEndpoint": { "type": "string", "minLength": 1, "title": "Reference endpoint", "description": "用于带参考图生成的 multipart 接口。" },
             "apiKey": { "type": "string", "title": "API Key", "x-sensitive": true },
             "model": { "type": "string", "title": "Model" },
             "timeoutMs": { "type": "integer", "minimum": 1, "title": "超时毫秒数" },

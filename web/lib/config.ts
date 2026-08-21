@@ -21,7 +21,13 @@ export interface CustomProviderConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+  temperature: number;
+  maxTokens: number;
+  contextLimit: number;
+  thinkingLevel: ThinkingLevel;
 }
+
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 interface StoredWebConfig extends Partial<WebConfig> {
   password?: string;
@@ -34,7 +40,10 @@ const defaults: WebConfig = {
   trustProxy: false,
   passwordHash: "",
   passwordSalt: "",
-  customProvider: { enabled: false, baseUrl: "", apiKey: "", model: "" },
+  customProvider: {
+    enabled: false, baseUrl: "", apiKey: "", model: "",
+    temperature: 1, maxTokens: 16384, contextLimit: 128000, thinkingLevel: "off",
+  },
 };
 
 export async function loadWebConfig(): Promise<WebConfig> {
@@ -104,5 +113,21 @@ function parseCustomProvider(value: unknown): CustomProviderConfig {
     baseUrl: typeof provider.baseUrl === "string" ? provider.baseUrl.trim() : "",
     apiKey: typeof provider.apiKey === "string" ? provider.apiKey : "",
     model: typeof provider.model === "string" ? provider.model.trim() : "",
+    temperature: finiteNumber(provider.temperature, defaults.customProvider.temperature, 0, 2),
+    maxTokens: positiveInteger(provider.maxTokens, defaults.customProvider.maxTokens),
+    contextLimit: positiveInteger(provider.contextLimit, defaults.customProvider.contextLimit),
+    thinkingLevel: isThinkingLevel(provider.thinkingLevel) ? provider.thinkingLevel : defaults.customProvider.thinkingLevel,
   };
+}
+
+function finiteNumber(value: unknown, fallback: number, minimum: number, maximum: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum ? value : fallback;
+}
+
+function positiveInteger(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+export function isThinkingLevel(value: unknown): value is ThinkingLevel {
+  return value === "off" || value === "minimal" || value === "low" || value === "medium" || value === "high" || value === "xhigh";
 }

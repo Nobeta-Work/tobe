@@ -10,6 +10,10 @@
     "enabled": false,
     "baseUrl": "",
     "apiKey": "",
-    "model": ""
+    "model": "",
+    "temperature": 1,
+    "maxTokens": 16384,
+    "contextLimit": 128000,
+    "thinkingLevel": "off"
   }
 }

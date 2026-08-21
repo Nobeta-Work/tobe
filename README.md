@@ -1,13 +1,26 @@
-# ToBe
 <div align="center">
-    <a href="https://nobeta.cn/tobe"><img alt="tobe logo" src="https://nobeta.cn/i/2026/08/13/b49782.webp" width="256"></a>
 
-### To Be a real Being.
+<img src="docs/preview.png" alt="To Be Plugin - To Be a Real Being." width="888">
+
+<br>
+
+# 🦄 To Be (成人)
+
+### *To Be a Real Being*
+
+[![npm](https://img.shields.io/npm/v/@nobeta/tobe?color=yellow)](https://www.npmjs.com/package/@nobeta/tobe)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E=22.19-brightgreen)](https://nodejs.org/)
+
+Model plus Harness equals Agent. Agent plus Plugins equals Being.
+
+[**简体中文**](./README.md) · [**English**](docs/README_EN.md)
 
 </div>
 
+---
 
-**ToBe** 致力于孕育具备独立人格的数字主体：
+**ToBe** 致力于通过插件让 Agent 在数字空间成为人的存在：
 
 - **only** : 每一个 ToBe 主体都具有稳定的实例连续性。
 - **grow** : 随交互经历持续自主演进，具备随时间成长的生命力。
@@ -23,8 +36,8 @@ flowchart LR
     subgraph Awa["Awareness Layer"]
         AAdap("Adapter")
         AEng["Engine"]
-        AAdap --> AEng
-        AEng --> AAdap
+    AAdap --> MP["Media Pipeline"] --> AEng
+    AEng --> MP --> AAdap
     end
     A[[Agent]]
     M[(Memory)]
@@ -33,9 +46,8 @@ flowchart LR
     Env -->|感知| AAdap --> Env
     AEng --> A -->|交互| AEng
     A <-->|沉淀| M
-    A <-->|检索 / 生成| Media
-    AAdap <-->|识别 / 解析| Media
-    AAdap ~~~|过滤转换| AEng
+    A <-->|列出 / 分析 / 生成| Media
+    MP <-->|存储 / 解析| Media
 
     style Env fill:#e8e8e8,stroke:#9e9e9e,color:#333
     style Awa fill:#e3f2fd,stroke:#1e88e5,color:#0d47a1
@@ -52,7 +64,7 @@ flowchart LR
 | [Web](./web/README.md) | 单用户控制台、长期 Pi Session 与配置管理 |
 | [Awareness](./awareness/README.md) | 环境 Adapter、消息分级、主动推送与交互路由 |
 | [Memory](./memory/README.md) | 持久认知、Dream 与可演化 Skills |
-| [Media](./media/README.md) | 图片/音频识别、检索、生成与 Adapter 联动 |
+| [Media](./media/README.md) | 图片/音频识别、检索、生成与 Awareness 联动 |
 
 ## Quick Start
 
@@ -103,50 +115,24 @@ Adapter 配置、各 Adapter 的 `data/`、Memory 的实例认知、Dream 和自
 允许感知层提供交互接口，交互是感知的延申。感知与交互由对应的 Adapter 承诺。
 
 | 默认 Adapters | 说明 |
-| :-: | :-: |
+| ------ | ---------- |
 | [IIROSE](./awareness/adapters/iirose-adapter/README.md) | 群聊场景，低可信环境置信方案 |
 | [Feishu](./awareness/adapters/feishu-adapter/README.md) | 飞书官方 SDK |
 | [WeChat](./awareness/adapters/wechat-adapter/README.md) | 微信 iLink 会话与 Media 输入输出 |
 
 ## Media
 
-Media 提供双向媒体能力，为 Awareness 提供标准媒体类型，基于文本为 Agent 转换媒体内容。可以独立配置图片识别、语音识别、图片生成和语音生成模型 API。
+Media 提供双向媒体能力。Adapter 与 Media Pipeline 之间使用内部 `MediaMetadata`，Agent 只看到可复用的 `MediaRef`。可以独立配置图片识别、语音识别、图片生成和语音生成模型 API。
 
 媒体调用分为 **检索型媒体** 与 **生成型媒体**：
 - 检索型媒体：依赖于 `media/lib` 中的本地媒体资产，无需即时生成媒体内容，适合固定响应。
 - 生成型媒体：依赖生成型 API，生成内容携带描述信息，支持后续转移固定为本地资产复用。
 
-> 默认 Agent Model 基于文本思考。Adapter 可以自行承诺把原生多模态内容直接传给支持它的模型(与 Agent Core)。
-
-## Plan (Pending)
-
-> Great Pi! It intentionally does not include build-in plan mode.
-
-认知模式：期望/试探模型
-
-- 已有理解形成假设期望
-- 根据期望试探、询问或观察
-- 根据结果修改认知
-
-## Live (Pending)
-
-在可控空闲频率下，主动感知、交互、更新外界、用户近况。
-
-- 心跳
-- 内在活动
-- 外在主动
-
-## Work (Pending)
-
-为了 "only" 的连续性，一般的执行计划是单程的。
-
-由于感知层极大扩展了消息的来源与交互广度，ToBe 在扮演助手角色的时候，为了增强执行速度与任务分化，需要通过 Multi Agents 并发执行的方式使自己成为三头六臂之人。在复杂子任务（如编码环境下），甚至需要 Sub Agent 重现 Coding Agent 能力 (调用 Sota Coding Product, like Codex 也可以成为另一种方法)。
+Agent 公开能力固定为 `media_list`、`media_analyze`、`media_generate`。Adapter 不直接调用 Media；媒体收发统一经过 Awareness 的 Media Pipeline。
 
 ## Contribute
 
-Welcom to contribute: This project is built with design considerations mainly, thanks to contact me.
-
-欢迎参与开发：该项目开发更多为设计考量，请与我联系。
+欢迎联系交流探讨，一起参与 ToBe 开发，参见 [CONTRIBUTING](./CONTRIBUTING.md)。
 
 ## License
 

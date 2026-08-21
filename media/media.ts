@@ -1,24 +1,28 @@
-import { createHash } from "node:crypto";
 import type { MediaConfig } from "./config.ts";
 import { MediaFiles } from "./files/index.ts";
 import { detectMimeType } from "./files/mime.ts";
 import { createMediaModels } from "./models/index.ts";
 import {
   MediaError,
-  type MediaArtifact,
+  type ArtifactMediaRef,
+  type MediaAnalysis,
+  type MediaAnalyzeRequest,
   type MediaConstraints,
   type MediaData,
   type MediaGenerateRequest,
-  type MediaInput,
   type MediaKind,
   type MediaLibraryIndex,
   type MediaListRequest,
+  type MediaMetadata,
   type MediaModels,
-  type MediaRecognition,
+  type MediaRef,
   type MediaService,
   type MediaServiceStatus,
-  type ResolvedMedia,
 } from "./type.ts";
+
+const DEFAULT_IMAGE_ANALYSIS_PROMPT = "请准确描述图片内容。若有多张图片，请在一次回答中比较它们。";
+const DEFAULT_AUDIO_ANALYSIS_PROMPT = "请准确转录并说明音频内容。";
+const DEFAULT_REFERENCE_GENERATION_PROMPT = "请依据提供的参考媒体生成新的内容。";
 
 export class Media implements MediaService {
   readonly #models: MediaModels;
@@ -31,7 +35,7 @@ export class Media implements MediaService {
 
   async status(): Promise<MediaServiceStatus> {
     return {
-      recognition: { image: this.#models.canRecognize("image"), audio: this.#models.canRecognize("audio") },
+      analysis: { image: this.#models.canAnalyze("image"), audio: this.#models.canAnalyze("audio") },
       generation: { image: this.#models.canGenerate("image"), audio: this.#models.canGenerate("audio") },
       libraryKinds: await this.#files.libraryKinds(),
     };
@@ -41,60 +45,97 @@ export class Media implements MediaService {
     return this.#files.listLibrary(request.kind);
   }
 
-  async recognize(input: MediaData, signal?: AbortSignal): Promise<MediaRecognition> {
+  async import(input: MediaData, description = ""): Promise<ArtifactMediaRef> {
     validateMediaData(input, this.config.maxInputBytes);
-    if (input.kind !== "image" && input.kind !== "audio") throw new MediaError("MEDIA_UNSUPPORTED", `Recognition is not supported for ${input.kind}`);
-    if (!this.#models.canRecognize(input.kind)) throw new MediaError("MEDIA_PROVIDER_UNAVAILABLE", `${input.kind} recognition model is unavailable`);
-    const text = (await this.#models.recognize(input, signal)).trim();
-    if (!text) throw new MediaError("MEDIA_PROVIDER_FAILED", "Media recognition returned an empty explanation");
-    return {
-      media: {
-        version: 1, kind: input.kind, mimeType: input.mimeType,
-        ...(input.fileName ? { fileName: input.fileName } : {}),
-        size: input.data.byteLength, sha256: createHash("sha256").update(input.data).digest("hex"), origin: { type: "imported" },
-      },
-      text,
-      provider: this.#models.id,
-    };
+    return this.#files.saveImported(input, description);
   }
 
-  async generate(request: MediaGenerateRequest, signal?: AbortSignal): Promise<MediaArtifact> {
-    const text = request.text.trim();
-    if (!text) throw new MediaError("MEDIA_INVALID_REQUEST", "Generation text must not be empty");
-    if (text.length > 10_000) throw new MediaError("MEDIA_INVALID_REQUEST", "Generation text exceeds 10000 characters");
-    if (!this.#models.canGenerate(request.kind)) throw new MediaError("MEDIA_PROVIDER_UNAVAILABLE", `${request.kind} generation model is unavailable`);
-    const generated = await this.#models.generate({ ...request, text }, signal);
-    if (generated.kind !== request.kind) throw new MediaError("MEDIA_PROVIDER_FAILED", `Model returned ${generated.kind} for ${request.kind} generation`);
+  async analyze(request: MediaAnalyzeRequest, signal?: AbortSignal): Promise<MediaAnalysis> {
+    if (!request.inputs.length) throw new MediaError("MEDIA_INVALID_REQUEST", "Analysis requires at least one media input");
+    if (request.inputs.length > 8) throw new MediaError("MEDIA_INVALID_REQUEST", "Analysis accepts at most 8 media inputs");
+    const inputs: MediaData[] = [];
+    for (const input of request.inputs) {
+      const data = isMediaRef(input) ? await this.resolve(input) : input;
+      validateMediaData(data, this.config.maxInputBytes);
+      if (data.kind !== "image" && data.kind !== "audio") {
+        throw new MediaError("MEDIA_UNSUPPORTED", `Analysis is not supported for ${data.kind}`);
+      }
+      if (!this.#models.canAnalyze(data.kind)) {
+        throw new MediaError("MEDIA_PROVIDER_UNAVAILABLE", `${data.kind} analysis model is unavailable`);
+      }
+      inputs.push(data);
+    }
+    const prompt = request.prompt?.trim() || defaultAnalysisPrompt(inputs);
+    if (prompt.length > 10_000) throw new MediaError("MEDIA_INVALID_REQUEST", "Analysis prompt exceeds 10000 characters");
+    const description = (await this.#models.analyze(inputs, prompt, signal)).trim();
+    if (!description) throw new MediaError("MEDIA_PROVIDER_FAILED", "Media analysis returned an empty description");
+    return { description, provider: this.#models.id, inputCount: inputs.length };
+  }
+
+  async generate(request: MediaGenerateRequest, signal?: AbortSignal): Promise<ArtifactMediaRef> {
+    const references = await Promise.all((request.references ?? []).map((ref) => this.resolve(ref)));
+    if (references.length > 4) throw new MediaError("MEDIA_INVALID_REQUEST", "Generation accepts at most 4 media references");
+    const prompt = request.prompt?.trim() || (references.length ? DEFAULT_REFERENCE_GENERATION_PROMPT : "");
+    if (!prompt) throw new MediaError("MEDIA_INVALID_REQUEST", "Generation requires a prompt or at least one reference");
+    if (prompt.length > 10_000) throw new MediaError("MEDIA_INVALID_REQUEST", "Generation prompt exceeds 10000 characters");
+    if (!this.#models.canGenerate(request.kind)) {
+      throw new MediaError("MEDIA_PROVIDER_UNAVAILABLE", `${request.kind} generation model is unavailable`);
+    }
+    const generated = await this.#models.generate({
+      kind: request.kind,
+      prompt,
+      references,
+      ...(request.options ? { options: request.options } : {}),
+    }, signal);
+    if (generated.kind !== request.kind) {
+      throw new MediaError("MEDIA_PROVIDER_FAILED", `Model returned ${generated.kind} for ${request.kind} generation`);
+    }
     validateMediaData(generated, this.config.maxGeneratedBytes);
     return this.#files.saveGenerated(generated);
   }
 
-  async resolve(input: MediaInput, constraints: MediaConstraints = {}): Promise<ResolvedMedia> {
-    return input.source === "artifact"
-      ? this.#files.resolveGenerated(input.mediaId, constraints)
-      : this.#files.resolveLibrary(input, constraints);
+  async resolve(ref: MediaRef, constraints: MediaConstraints = {}): Promise<MediaMetadata> {
+    return this.#files.resolve(parseMediaRef(ref), constraints);
   }
-
-  async inspect(mediaId: string): Promise<MediaArtifact | undefined> { return this.#files.inspect(mediaId); }
 }
 
-export function parseMediaInput(value: unknown): MediaInput {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new MediaError("MEDIA_INVALID_REQUEST", "media must be an object");
+export function parseMediaRef(value: unknown): MediaRef {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new MediaError("MEDIA_INVALID_REQUEST", "media must be an object");
+  }
   const input = value as Record<string, unknown>;
-  if (input.source === "artifact") return { source: "artifact", mediaId: requiredString(input.mediaId, "media.mediaId") };
+  if (input.type !== "media_ref") throw new MediaError("MEDIA_INVALID_REQUEST", "media.type must be media_ref");
+  const kind = requiredMediaKind(input.kind, "media.kind");
+  const description = requiredString(input.description, "media.description", true);
+  if (input.source === "artifact") {
+    rejectFields(input, ["category", "tag"]);
+    return { type: "media_ref", source: "artifact", kind, id: requiredString(input.id, "media.id"), description };
+  }
   if (input.source === "library") {
-    if (input.selection !== undefined && input.selection !== "random" && input.selection !== "best") {
-      throw new MediaError("MEDIA_INVALID_REQUEST", "media.selection must be random or best");
-    }
+    rejectFields(input, ["id"]);
     return {
-      source: "library",
-      kind: requiredMediaKind(input.kind, "media.kind"),
+      type: "media_ref", source: "library", kind,
       category: requiredString(input.category, "media.category"),
       tag: requiredString(input.tag, "media.tag"),
-      ...(input.selection ? { selection: input.selection } : {}),
+      description,
     };
   }
   throw new MediaError("MEDIA_INVALID_REQUEST", "media.source must be artifact or library");
+}
+
+export function isMediaRef(value: unknown): value is MediaRef {
+  try { parseMediaRef(value); return true; }
+  catch { return false; }
+}
+
+export function isMediaMetadata(value: unknown): value is MediaMetadata {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const input = value as Partial<MediaMetadata>;
+  return input.data instanceof Uint8Array
+    && typeof input.mimeType === "string"
+    && typeof input.size === "number"
+    && typeof input.sha256 === "string"
+    && (input.kind === "image" || input.kind === "audio" || input.kind === "video" || input.kind === "file");
 }
 
 export function mediaErrorResult(error: unknown): { status: "error"; code: string; message: string } {
@@ -103,7 +144,7 @@ export function mediaErrorResult(error: unknown): { status: "error"; code: strin
 }
 
 function validateMediaData(input: MediaData, maxBytes: number): void {
-  if (!input.data.byteLength) throw new MediaError("MEDIA_INVALID_REQUEST", "Media data is empty");
+  if (!(input.data instanceof Uint8Array) || !input.data.byteLength) throw new MediaError("MEDIA_INVALID_REQUEST", "Media data is empty");
   if (input.data.byteLength > maxBytes) throw new MediaError("MEDIA_TOO_LARGE", `Media exceeds ${maxBytes} bytes`);
   const detected = detectMimeType(input.data, input.fileName);
   if (detected.kind !== "file" && detected.kind !== input.kind) throw new MediaError("MEDIA_INVALID_REQUEST", `Media bytes are ${detected.kind}, not ${input.kind}`);
@@ -111,8 +152,14 @@ function validateMediaData(input: MediaData, maxBytes: number): void {
   if (prefix && !input.mimeType.startsWith(prefix)) throw new MediaError("MEDIA_INVALID_REQUEST", `MIME type does not match ${input.kind}`);
 }
 
-function requiredString(value: unknown, name: string): string {
-  if (typeof value !== "string" || !value.trim()) throw new MediaError("MEDIA_INVALID_REQUEST", `${name} must be a non-empty string`);
+function defaultAnalysisPrompt(inputs: readonly MediaData[]): string {
+  return inputs.every((input) => input.kind === "audio") ? DEFAULT_AUDIO_ANALYSIS_PROMPT : DEFAULT_IMAGE_ANALYSIS_PROMPT;
+}
+
+function requiredString(value: unknown, name: string, allowEmpty = false): string {
+  if (typeof value !== "string" || (!allowEmpty && !value.trim())) {
+    throw new MediaError("MEDIA_INVALID_REQUEST", `${name} must be ${allowEmpty ? "a string" : "a non-empty string"}`);
+  }
   return value.trim();
 }
 
@@ -122,4 +169,9 @@ function requiredMediaKind(value: unknown, name: string): MediaKind {
     throw new MediaError("MEDIA_INVALID_REQUEST", `${name} must be image, audio, video, or file`);
   }
   return kind;
+}
+
+function rejectFields(input: Record<string, unknown>, fields: readonly string[]): void {
+  const present = fields.find((field) => input[field] !== undefined);
+  if (present) throw new MediaError("MEDIA_INVALID_REQUEST", `media.${present} is not allowed for ${String(input.source)} refs`);
 }

@@ -14,6 +14,8 @@ npm start
 
 Pi 启动时会忽略机器上全局安装的 extensions，并显式加载根 `package.json` 中 `pi.extensions` 声明的仓库模块。这样更新仓库后重新启动 Web 即使用当前版本，避免旧全局 extension 产生工具冲突。
 
+项目 Agent 的工作目录固定为仓库 workspace 根目录。Web 同时将 Pi 的可写运行配置放在 workspace 的 `.pi/agent/`，避免依赖用户主目录权限；该目录包含 Web 内 `/login` 保存的认证信息并受 Git 忽略。
+
 ## 访问控制
 
 `allowedIps` 接受精确 IP 或 CIDR，例如：
@@ -50,15 +52,17 @@ Web 启动后不会自动运行 Agent。请在会话页面明确点击“运行 
 
 Web 展示 Pi 消息中的正文、思考过程、工具调用与工具结果，并在底部显示累计 Token、费用及当前上下文窗口占用。Pi extension 发起的选择、确认、单行输入和文本编辑请求会转为 Web 弹窗，通知、状态和 Widget 也会同步显示。
 
-Agent 运行后，在输入框键入 `/` 会展示 Pi RPC 当前返回的完整命令列表，并支持继续输入筛选、方向键选择、Tab 补全。列表不在 Web 中硬编码：extension、prompt template 和 skill 后续新增或重载的命令会随 `get_commands` 结果自动更新。提交时 `/command` 及参数仍原样交给 Pi 的 `prompt` 通道执行；命令处理期间产生的交互请求会留在同一个 Web 会话内完成。
+模型 Provider 请求失败时，Web 会在对应的 assistant 消息中持久显示 `errorMessage`。Pi 自动重试期间，底部状态栏显示重试进度；最终失败同时产生错误提示。刷新页面后错误仍可从会话记录中查看。
+
+Agent 运行后，在输入框键入 `/` 会展示 Pi RPC 当前返回的完整命令列表，并支持继续输入筛选、方向键选择、Tab 补全。列表不在 Web 中硬编码：extension、prompt template 和 skill 后续新增或重载的命令会随 `get_commands` 结果自动更新。`/clear` 由 Web 直接创建新的短期上下文并继续使用 `tobe` 名称，不删除 Memory 或媒体文件。
 
 Pi 的 `/login`、`/logout` 原本仅由 TUI 实现，RPC 不提供这两个内建命令。Web 启动 Agent 时会额外加载仅限 RPC 的命令桥：`/login [provider]` 可完成 OAuth 或 API Key 认证，`/logout [provider]` 可移除对应凭据。认证文件变化后 Agent 会自动恢复，使新凭据进入运行时；直接执行 `npm run start:pi` 时仍使用 Pi 原生命令，不受此桥接层影响。
 
-## 自定义 Provider
+## 主模型
 
-“设置”位于侧边栏底部。可启用一个名为 `tobe-custom` 的 OpenAI Chat Completions 兼容 Provider，填写 Base URL、API Key 和 Model。Base URL 末尾没有 `/v1` 时 Web 会自动补全；Key 保存在不受 Git 跟踪的 `web/config.json` 中，API 只向页面返回是否已经设置。
+侧边栏“模型”页面可启用名为 `tobe-custom` 的 OpenAI Chat Completions 兼容 Provider，填写 Base URL、API Key、Model、Temperature、Max tokens、Context limit 和 Thinking level。Base URL 末尾没有 `/v1` 时 Web 会自动补全；Key 保存在不受 Git 跟踪的 `web/config.json` 中，API 只向页面返回是否已经设置。
 
-Provider 配置在下一次运行 Agent 时生效。若 Agent 正在运行，保存后请先停止再重新运行。
+模型配置在下一次运行 Agent 时生效。上下文窗口与输出上限进入 Provider 模型定义，Temperature 注入每次 Provider 请求，Thinking level 在运行时启动后设置。若 Agent 正在运行，保存后请先停止再重新运行。
 
 ## Adapter 配置
 

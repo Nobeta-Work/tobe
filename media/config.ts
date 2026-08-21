@@ -6,6 +6,7 @@ export interface MediaApiConfig {
   enabled: boolean;
   baseUrl: string;
   endpoint: string;
+  referenceEndpoint?: string;
   apiKey: string;
   model: string;
   timeoutMs: number;

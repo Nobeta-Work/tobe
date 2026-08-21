@@ -25,6 +25,7 @@
       "enabled": false,
       "baseUrl": "",
       "endpoint": "/v1/images/generations",
+      "referenceEndpoint": "/v1/images/edits",
       "apiKey": "",
       "model": "",
       "timeoutMs": 120000,

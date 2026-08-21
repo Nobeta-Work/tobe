@@ -1,6 +1,6 @@
 import type { MediaApiConfig, MediaConfig } from "../config.ts";
 import { detectMimeType, extensionForMime } from "../files/mime.ts";
-import { MediaError, type GeneratedMedia, type MediaData, type MediaGenerateRequest, type MediaKind, type MediaModels } from "../type.ts";
+import { MediaError, type GeneratedMedia, type MediaData, type MediaKind, type MediaModelGenerateRequest, type MediaModels } from "../type.ts";
 
 type Fetch = typeof fetch;
 
@@ -14,7 +14,7 @@ export class HttpMediaModels implements MediaModels {
     this.#fetch = fetchImplementation;
   }
 
-  canRecognize(kind: MediaKind): boolean {
+  canAnalyze(kind: MediaKind): boolean {
     return kind === "image" ? this.#config.providers.imageRecognition.enabled
       : kind === "audio" ? this.#config.providers.audioRecognition.enabled : false;
   }
@@ -24,18 +24,18 @@ export class HttpMediaModels implements MediaModels {
       : kind === "audio" ? this.#config.providers.audioGeneration.enabled : false;
   }
 
-  async recognize(input: MediaData, signal?: AbortSignal): Promise<string> {
-    if (input.kind === "image") return this.#recognizeImage(input, signal);
-    if (input.kind === "audio") return this.#recognizeAudio(input, signal);
-    throw new MediaError("MEDIA_UNSUPPORTED", `Recognition is not supported for ${input.kind}`);
+  async analyze(inputs: readonly MediaData[], prompt: string, signal?: AbortSignal): Promise<string> {
+    if (inputs.every((input) => input.kind === "image")) return this.#analyzeImages(inputs, prompt, signal);
+    if (inputs.length === 1 && inputs[0]?.kind === "audio") return this.#analyzeAudio(inputs[0], prompt, signal);
+    throw new MediaError("MEDIA_UNSUPPORTED", "The configured HTTP providers cannot analyze mixed media or multiple audio files");
   }
 
-  async generate(request: MediaGenerateRequest, signal?: AbortSignal): Promise<GeneratedMedia> {
+  async generate(request: MediaModelGenerateRequest, signal?: AbortSignal): Promise<GeneratedMedia> {
     if (request.kind === "image") return this.#generateImage(request, signal);
     return this.#generateAudio(request, signal);
   }
 
-  async #recognizeImage(input: MediaData, signal?: AbortSignal): Promise<string> {
+  async #analyzeImages(inputs: readonly MediaData[], prompt: string, signal?: AbortSignal): Promise<string> {
     const config = this.#require(this.#config.providers.imageRecognition, "image recognition");
     const response = await this.#request(config, {
       method: "POST",
@@ -45,8 +45,8 @@ export class HttpMediaModels implements MediaModels {
         messages: [{
           role: "user",
           content: [
-            { type: "text", text: "请准确描述这张图片的内容。只输出对图片的文本解释，不要声称图片是文本消息。" },
-            { type: "image_url", image_url: { url: `data:${input.mimeType};base64,${Buffer.from(input.data).toString("base64")}` } },
+            { type: "text", text: prompt },
+            ...inputs.map((input) => ({ type: "image_url", image_url: { url: `data:${input.mimeType};base64,${Buffer.from(input.data).toString("base64")}` } })),
           ],
         }],
       }),
@@ -57,10 +57,11 @@ export class HttpMediaModels implements MediaModels {
     return text.trim();
   }
 
-  async #recognizeAudio(input: MediaData, signal?: AbortSignal): Promise<string> {
+  async #analyzeAudio(input: MediaData, prompt: string, signal?: AbortSignal): Promise<string> {
     const config = this.#require(this.#config.providers.audioRecognition, "audio recognition");
     const form = new FormData();
     form.set("model", config.model);
+    if (prompt) form.set("prompt", prompt);
     const audioBytes = new ArrayBuffer(input.data.byteLength);
     new Uint8Array(audioBytes).set(input.data);
     form.set("file", new Blob([audioBytes], { type: input.mimeType }), input.fileName ?? `audio${extensionForMime(input.mimeType)}`);
@@ -77,18 +78,23 @@ export class HttpMediaModels implements MediaModels {
     return text.trim();
   }
 
-  async #generateImage(request: MediaGenerateRequest, signal?: AbortSignal): Promise<GeneratedMedia> {
+  async #generateImage(request: MediaModelGenerateRequest, signal?: AbortSignal): Promise<GeneratedMedia> {
     const config = this.#require(this.#config.providers.imageGeneration, "image generation");
+    const init = request.references.length
+      ? imageEditRequest(request, config)
+      : {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            model: config.model,
+            prompt: request.prompt,
+            response_format: config.responseFormat ?? "b64_json",
+            ...safeGenerationOptions(request.options),
+          }),
+        };
     const response = await this.#request(config, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model: config.model,
-        prompt: request.text,
-        response_format: config.responseFormat ?? "b64_json",
-        ...safeGenerationOptions(request.options),
-      }),
-    }, signal);
+      ...init,
+    }, signal, request.references.length ? config.referenceEndpoint ?? "/v1/images/edits" : undefined);
     const json = await readJson(response);
     const encoded = nestedString(json, ["data", 0, "b64_json"]);
     let data: Uint8Array;
@@ -107,17 +113,18 @@ export class HttpMediaModels implements MediaModels {
     }
     const detected = detectMimeType(data);
     if (detected.kind !== "image") throw new MediaError("MEDIA_PROVIDER_FAILED", "Image generation returned non-image data");
-    return { kind: "image", mimeType: detected.mimeType, data, fileName: `generated${extensionForMime(detected.mimeType)}`, provider: this.id, description: request.text };
+    return { kind: "image", mimeType: detected.mimeType, data, fileName: `generated${extensionForMime(detected.mimeType)}`, provider: this.id, description: request.prompt };
   }
 
-  async #generateAudio(request: MediaGenerateRequest, signal?: AbortSignal): Promise<GeneratedMedia> {
+  async #generateAudio(request: MediaModelGenerateRequest, signal?: AbortSignal): Promise<GeneratedMedia> {
     const config = this.#require(this.#config.providers.audioGeneration, "audio generation");
+    if (request.references.length) throw new MediaError("MEDIA_UNSUPPORTED", "Audio generation references are not supported by the configured HTTP provider");
     const response = await this.#request(config, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         model: config.model,
-        input: request.text,
+        input: request.prompt,
         voice: stringOption(request.options, "voice") ?? config.voice ?? "alloy",
         response_format: stringOption(request.options, "responseFormat") ?? config.responseFormat ?? "mp3",
       }),
@@ -125,7 +132,7 @@ export class HttpMediaModels implements MediaModels {
     const data = await readLimitedBytes(response, this.#config.maxGeneratedBytes);
     const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim() || detectMimeType(data).mimeType;
     if (!mimeType.startsWith("audio/")) throw new MediaError("MEDIA_PROVIDER_FAILED", "Audio generation returned non-audio data");
-    return { kind: "audio", mimeType, data, fileName: `generated${extensionForMime(mimeType)}`, provider: this.id, description: request.text };
+    return { kind: "audio", mimeType, data, fileName: `generated${extensionForMime(mimeType)}`, provider: this.id, description: request.prompt };
   }
 
   #require(config: MediaApiConfig, operation: string): MediaApiConfig {
@@ -133,8 +140,8 @@ export class HttpMediaModels implements MediaModels {
     return config;
   }
 
-  async #request(config: MediaApiConfig, init: RequestInit, signal?: AbortSignal): Promise<Response> {
-    const url = new URL(config.endpoint, withTrailingSlash(config.baseUrl));
+  async #request(config: MediaApiConfig, init: RequestInit, signal?: AbortSignal, endpoint = config.endpoint): Promise<Response> {
+    const url = new URL(endpoint, withTrailingSlash(config.baseUrl));
     const headers = new Headers(init.headers);
     const apiKey = config.apiKey.trim();
     if (apiKey) headers.set("authorization", `Bearer ${apiKey}`);
@@ -198,6 +205,23 @@ function nestedString(value: unknown, path: readonly (string | number)[]): strin
 function stringOption(options: Readonly<Record<string, unknown>> | undefined, key: string): string | undefined {
   const value = options?.[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function imageEditRequest(request: MediaModelGenerateRequest, config: MediaApiConfig): RequestInit {
+  if (request.references.some((input) => input.kind !== "image")) {
+    throw new MediaError("MEDIA_UNSUPPORTED", "Image generation references must all be images");
+  }
+  const form = new FormData();
+  form.set("model", config.model);
+  form.set("prompt", request.prompt);
+  form.set("response_format", config.responseFormat ?? "b64_json");
+  for (const [key, value] of Object.entries(safeGenerationOptions(request.options))) form.set(key, String(value));
+  for (const [index, input] of request.references.entries()) {
+    const bytes = new ArrayBuffer(input.data.byteLength);
+    new Uint8Array(bytes).set(input.data);
+    form.append("image", new Blob([bytes], { type: input.mimeType }), input.fileName ?? `reference-${index}${extensionForMime(input.mimeType)}`);
+  }
+  return { method: "POST", body: form };
 }
 
 function safeGenerationOptions(options: Readonly<Record<string, unknown>> | undefined): Record<string, unknown> {

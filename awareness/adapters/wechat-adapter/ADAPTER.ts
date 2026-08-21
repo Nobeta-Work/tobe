@@ -1,7 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { getMedia, mediaErrorResult, parseMediaInput } from "../../../media/index.ts";
-import type { MediaData, MediaService } from "../../../media/type.ts";
+import type { MediaMetadata } from "../../../media/type.ts";
 import type { AdapterHealth, EnvAdapter, ObservationListener, Unsubscribe } from "../../adapter.ts";
 import type { AdapterCallResult, Interaction, Level, Observation, ObserveRequest } from "../../type.ts";
 import { loadConfig, type WeChatConfig } from "./config.ts";
@@ -13,7 +12,7 @@ type LoginStatus = "idle" | "restoring" | "login_required" | "requesting_qr" | "
 interface CachedMessage { message: WeChatIncomingMessage; expiresAt: number }
 interface PendingVerify { resolve(code: string): void; reject(error: Error): void }
 
-export interface WeChatAdapterOptions { configPath?: string; config?: WeChatConfig; gateway?: WeChatGateway; mediaService?: MediaService }
+export interface WeChatAdapterOptions { configPath?: string; config?: WeChatConfig; gateway?: WeChatGateway }
 
 export class WeChatAdapter implements EnvAdapter {
   readonly id = randomUUID().replaceAll("-", "").slice(0, 10);
@@ -22,7 +21,6 @@ export class WeChatAdapter implements EnvAdapter {
   readonly autoStart: boolean;
   readonly #config: WeChatConfig;
   readonly #gateway: WeChatGateway;
-  readonly #mediaServiceOverride: MediaService | undefined;
   readonly #listeners = new Set<ObservationListener>();
   readonly #seen = new Map<string, number>();
   readonly #messages = new Map<string, CachedMessage>();
@@ -38,7 +36,6 @@ export class WeChatAdapter implements EnvAdapter {
     this.#config = options.config ?? loadConfig(options.configPath);
     this.autoStart = this.#config.enabled && this.#config.autoStart;
     this.#gateway = options.gateway ?? new SdkWeChatGateway(this.#config);
-    this.#mediaServiceOverride = options.mediaService;
   }
 
   /** Auto-start only restores an existing session; it never creates a QR login flow. */
@@ -115,11 +112,11 @@ export class WeChatAdapter implements EnvAdapter {
           this.#assertOnline();
           const userId = requirePublicUserId(interaction.args.userId);
           if (!this.#gateway.sendMedia) throw new Error("WeChat gateway does not support media sending");
-          const service = this.#requireMediaService();
-          const resolved = await service.resolve(parseMediaInput(interaction.args.media), wechatMediaConstraints());
+          const media = requireMediaMetadata(interaction.args.media);
+          validateWechatMedia(media);
           const caption = optionalString(interaction.args.caption, "caption");
-          await this.#gateway.sendMedia(userId, resolved, caption);
-          return this.#result(interaction.call_id, interaction.action, { status: "success", userId, media: resolved.artifact, delivery: mediaDelivery(resolved.artifact.kind) });
+          await this.#gateway.sendMedia(userId, media, caption);
+          return this.#result(interaction.call_id, interaction.action, { status: "success", userId, media: publicMedia(media), delivery: mediaDelivery(media.kind) });
         }
         case "reply_media": {
           this.#assertOnline();
@@ -127,11 +124,11 @@ export class WeChatAdapter implements EnvAdapter {
           if (!this.#gateway.replyMedia) throw new Error("WeChat gateway does not support media replies");
           const cached = this.#takeCachedMessage(messageId);
           if (!cached) throw new Error("Message is unknown or its reply context has expired");
-          const service = this.#requireMediaService();
-          const resolved = await service.resolve(parseMediaInput(interaction.args.media), wechatMediaConstraints());
+          const media = requireMediaMetadata(interaction.args.media);
+          validateWechatMedia(media);
           const caption = optionalString(interaction.args.caption, "caption");
-          await this.#gateway.replyMedia(cached, resolved, caption);
-          return this.#result(interaction.call_id, interaction.action, { status: "success", messageId, media: resolved.artifact, delivery: mediaDelivery(resolved.artifact.kind) });
+          await this.#gateway.replyMedia(cached, media, caption);
+          return this.#result(interaction.call_id, interaction.action, { status: "success", messageId, media: publicMedia(media), delivery: mediaDelivery(media.kind) });
         }
         case "send_typing": {
           this.#assertOnline();
@@ -164,41 +161,35 @@ export class WeChatAdapter implements EnvAdapter {
     this.#messages.set(messageId, { message, expiresAt: now + this.#config.events.messageCacheTtlMs });
     while (this.#messages.size > this.#config.events.maxCachedMessages) this.#messages.delete(this.#messages.keys().next().value as string);
     this.#health = { ...this.#health, lastEventAt: now };
-    const recognized = await this.#recognizeMedia(message);
+    let downloaded: MediaMetadata | undefined;
+    let mediaDownloadError: string | undefined;
+    try { downloaded = await this.#downloadMedia(message); }
+    catch (error) { mediaDownloadError = errorMessage(error); }
     await this.#emit({
       id: fingerprint, adapter_id: this.id, adapter_name: this.name, source: `wechat:${WECHAT_PUBLIC_USER_ID}`, actor: "user",
       content: {
         eventType: "message.received", messageId, userId: WECHAT_PUBLIC_USER_ID, messageType: message.type,
-        text: recognized?.text ?? message.text,
-        ...(recognized ? { media: recognized.media, mediaRecognition: recognized.recognition } : mediaMarker(message.type)),
+        text: message.text || mediaText(message.type),
+        ...(downloaded ? { media: downloaded } : mediaDownloadError
+          ? { mediaError: { status: "error", code: "MEDIA_DOWNLOAD_FAILED", message: mediaDownloadError } }
+          : mediaMarker(message.type)),
         ...(message.quotedMessage ? { quotedMessage: message.quotedMessage } : {}), transport: "ilink_long_poll", transportVerified: true,
       },
       trust: "high", attention: "high", timestamp: message.timestamp.getTime(),
     });
   }
 
-  async #recognizeMedia(message: WeChatIncomingMessage): Promise<{ text: string; media: unknown; recognition: unknown } | undefined> {
+  async #downloadMedia(message: WeChatIncomingMessage): Promise<MediaMetadata | undefined> {
     const kind = message.type === "image" ? "image" : message.type === "voice" ? "audio" : undefined;
     if (!kind) return undefined;
-    const service = this.#mediaService();
-    if (!service || !this.#gateway.downloadMedia) {
-      return { text: message.text || `[${kind}]`, media: { kind }, recognition: { status: "unavailable" } };
-    }
-    try {
-      const media = await this.#gateway.downloadMedia(message);
-      if (!media || media.kind !== kind) throw new Error(`WeChat did not provide ${kind} data`);
-      const result = await service.recognize(media as MediaData);
-      return { text: result.text, media: result.media, recognition: { status: "success", provider: result.provider } };
-    } catch (error) {
-      return { text: message.text || `[${kind}]`, media: { kind }, recognition: mediaErrorResult(error) };
-    }
-  }
-
-  #mediaService(): MediaService | undefined { return this.#mediaServiceOverride ?? getMedia(); }
-  #requireMediaService(): MediaService {
-    const service = this.#mediaService();
-    if (!service) throw new Error("Media capability is not loaded");
-    return service;
+    if (!this.#gateway.downloadMedia) return undefined;
+    const media = await this.#gateway.downloadMedia(message);
+    if (!media || media.kind !== kind) return undefined;
+    return {
+      ...media,
+      size: media.data.byteLength,
+      sha256: createHash("sha256").update(media.data).digest("hex"),
+    };
   }
 
   async #beginInteractiveLogin(interaction: Interaction): Promise<AdapterCallResult> {
@@ -311,13 +302,27 @@ function requirePublicUserId(value: unknown): string {
 }
 function optionalString(value: unknown, name: string): string | undefined { if (value === undefined) return undefined; return requireString(value, name); }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }
-function mediaMarker(type: string): { media: { kind: string }; mediaRecognition: { status: "unavailable" } } | {} {
+function mediaMarker(type: string): { mediaError: { status: "error"; code: string; message: string } } | {} {
   const kind = type === "video" ? "video" : type === "file" ? "file" : undefined;
-  return kind ? { media: { kind }, mediaRecognition: { status: "unavailable" } } : {};
+  return kind ? { mediaError: { status: "error", code: "MEDIA_UNSUPPORTED", message: `${kind} input is not analyzed in v0.2.0` } } : {};
 }
-function wechatMediaConstraints() {
-  return { kinds: ["image", "audio"] as const, mimeTypes: ["image/jpeg", "image/png", "image/gif", "image/webp", "audio/mpeg", "audio/wav", "audio/ogg", "audio/mp4"], maxBytes: 20 * 1024 * 1024, image: { allowAnimated: true } };
+function mediaText(type: string): string { return type === "voice" ? "[audio]" : type === "image" ? "[image]" : ""; }
+function requireMediaMetadata(value: unknown): MediaMetadata {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("media must be prepared by the Awareness Media Pipeline");
+  const media = value as Partial<MediaMetadata>;
+  if (!(media.data instanceof Uint8Array) || typeof media.kind !== "string" || typeof media.mimeType !== "string"
+    || typeof media.size !== "number" || typeof media.sha256 !== "string") {
+    throw new Error("media must be prepared by the Awareness Media Pipeline");
+  }
+  return media as MediaMetadata;
 }
-function mediaDelivery(kind: string): "native_image" | "audio_file" { return kind === "image" ? "native_image" : "audio_file"; }
+function validateWechatMedia(media: MediaMetadata): void {
+  const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp", "audio/silk", "audio/mpeg", "audio/wav", "audio/ogg"];
+  if (media.kind !== "image" && media.kind !== "audio") throw new Error(`WeChat cannot send ${media.kind} media`);
+  if (!allowed.includes(media.mimeType)) throw new Error(`WeChat does not accept ${media.mimeType}`);
+  if (!media.size || media.size > 20 * 1024 * 1024) throw new Error("WeChat media exceeds 20 MiB");
+}
+function publicMedia(media: MediaMetadata) { return { kind: media.kind, mimeType: media.mimeType, size: media.size, sha256: media.sha256 }; }
+function mediaDelivery(kind: string): "native_image" | "voice_bubble" { return kind === "image" ? "native_image" : "voice_bubble"; }
 export function createAdapter(): EnvAdapter { return new WeChatAdapter(); }
 export default createAdapter;

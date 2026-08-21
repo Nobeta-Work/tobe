@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { CUSTOM_PROVIDER_EXTENSION_PATH, REPO_DIR, RPC_COMMANDS_EXTENSION_PATH, SESSION_DIR } from "../lib/paths.ts";
+import { CUSTOM_PROVIDER_EXTENSION_PATH, PI_AGENT_DIR, REPO_DIR, RPC_COMMANDS_EXTENSION_PATH, SESSION_DIR } from "../lib/paths.ts";
 import type { CustomProviderConfig } from "../lib/config.ts";
 import { findNamedSession } from "./sessions.ts";
 
@@ -23,6 +23,7 @@ export interface AgentSnapshot {
   desiredRunning: boolean;
   state: Record<string, unknown> | null;
   error: string | null;
+  diagnostics: string | null;
   stats: Record<string, unknown> | null;
   commands: unknown[];
 }
@@ -33,6 +34,7 @@ export class AgentHost extends EventEmitter {
   private desiredRunning = false;
   private lastState: Record<string, unknown> | null = null;
   private lastError: string | null = null;
+  private stderrTail = "";
   private lastStats: Record<string, unknown> | null = null;
   private lastCommands: unknown[] = [];
   private sequence = 0;
@@ -51,6 +53,7 @@ export class AgentHost extends EventEmitter {
       desiredRunning: this.desiredRunning,
       state: this.lastState,
       error: this.lastError,
+      diagnostics: this.stderrTail || null,
       stats: this.lastStats,
       commands: this.lastCommands,
     };
@@ -73,6 +76,8 @@ export class AgentHost extends EventEmitter {
     this.restartTimer = null;
     const child = this.child;
     if (!child) {
+      this.lastError = null;
+      this.stderrTail = "";
       this.setProcessState("stopped");
       return this.snapshot();
     }
@@ -87,9 +92,23 @@ export class AgentHost extends EventEmitter {
     const input = message.trim();
     if (!input) throw new Error("消息不能为空");
     if (!this.child) throw new Error("Agent 尚未启动");
+    if (input === "/clear") {
+      await this.clearContext();
+      return;
+    }
     await this.command({ type: "prompt", message: input, streamingBehavior: "followUp" });
     await this.refreshState();
     if (input.startsWith("/")) await this.refreshMetrics();
+  }
+
+  private async clearContext(): Promise<void> {
+    if (this.lastState?.isStreaming === true) await this.command({ type: "abort" });
+    await this.command({ type: "new_session" });
+    await this.command({ type: "set_session_name", name: SESSION_NAME });
+    this.lastStats = null;
+    await this.refreshState();
+    await this.refreshMetrics();
+    this.broadcast("agent.context_cleared", { sessionName: SESSION_NAME });
   }
 
   async abort(): Promise<void> {
@@ -135,7 +154,7 @@ export class AgentHost extends EventEmitter {
   }
 
   private async spawnAgent(recovering: boolean): Promise<void> {
-    await mkdir(SESSION_DIR, { recursive: true });
+    await Promise.all([mkdir(SESSION_DIR, { recursive: true }), mkdir(PI_AGENT_DIR, { recursive: true })]);
     const existingSession = await findNamedSession(SESSION_DIR, SESSION_NAME);
     const cli = join(REPO_DIR, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
     const args = [cli, "--mode", "rpc", "--session-dir", SESSION_DIR, "--no-extensions"];
@@ -150,27 +169,33 @@ export class AgentHost extends EventEmitter {
     }
     if (existingSession) args.push("--session", existingSession);
     this.setProcessState(recovering ? "recovering" : "starting");
-    this.lastError = null;
-    const child = spawn(process.execPath, args, { cwd: REPO_DIR, env: process.env, stdio: ["pipe", "pipe", "pipe"] });
+    this.stderrTail = "";
+    const child = spawn(process.execPath, args, {
+      cwd: REPO_DIR,
+      env: { ...process.env, PI_CODING_AGENT_DIR: process.env.PI_CODING_AGENT_DIR?.trim() || PI_AGENT_DIR },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     this.child = child;
     this.stdoutBuffer = "";
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => this.consumeStdout(chunk));
-    child.stderr.on("data", (chunk: string) => this.broadcast("agent.stderr", { message: chunk.trim() }));
+    child.stderr.on("data", (chunk: string) => this.recordStderr(chunk));
     child.on("error", (error) => this.handleExit(error));
     child.on("exit", (code, signal) => this.handleExit(new Error(`Pi exited (${code ?? signal ?? "unknown"})`)));
 
     try {
       await this.refreshState();
+      if (customProvider.enabled) await this.command({ type: "set_thinking_level", level: customProvider.thinkingLevel });
       await this.command({ type: "set_session_name", name: SESSION_NAME });
       await this.refreshState();
       await this.refreshMetrics();
       this.restartAttempt = 0;
+      this.lastError = null;
       this.setProcessState("running");
     } catch (error) {
-      child.kill();
-      throw error;
+      if (this.child === child) child.kill();
+      throw new Error(this.lastError || summarizePiFailure(this.stderrTail) || errorMessage(error));
     }
   }
 
@@ -233,9 +258,16 @@ export class AgentHost extends EventEmitter {
       pending.reject(error);
       this.pending.delete(id);
     }
-    this.lastError = error.message;
+    const failedDuringInitialStart = this.processState === "starting";
     if (!this.desiredRunning) {
       this.lastError = null;
+      this.stderrTail = "";
+      this.setProcessState("stopped");
+      return;
+    }
+    this.lastError = summarizePiFailure(this.stderrTail) || error.message;
+    if (failedDuringInitialStart) {
+      this.desiredRunning = false;
       this.setProcessState("stopped");
       return;
     }
@@ -248,7 +280,7 @@ export class AgentHost extends EventEmitter {
   }
 
   private handleSpawnFailure(error: unknown): void {
-    this.lastError = error instanceof Error ? error.message : String(error);
+    this.lastError = summarizePiFailure(this.stderrTail) || errorMessage(error);
     if (!this.desiredRunning) return;
     this.setProcessState("recovering");
     const delay = Math.min(30_000, 1_000 * 2 ** Math.min(this.restartAttempt++, 5));
@@ -263,10 +295,26 @@ export class AgentHost extends EventEmitter {
     this.broadcast("agent.state", this.snapshot());
   }
 
+  private recordStderr(chunk: string): void {
+    const message = chunk.trim();
+    if (!message) return;
+    this.stderrTail = `${this.stderrTail}${this.stderrTail ? "\n" : ""}${message}`.slice(-16_000);
+    this.broadcast("agent.stderr", { message });
+  }
+
   private broadcast(type: string, data: unknown): void {
     this.emit("event", { type, data, at: new Date().toISOString() });
   }
 }
+
+export function summarizePiFailure(stderr: string): string | null {
+  const messages = [...stderr.matchAll(/^Error:\s*(.+)$/gim)].map((match) => match[1]?.trim()).filter(Boolean);
+  if (messages.length) return messages.at(-1) ?? null;
+  const warning = stderr.split(/\r?\n/).map((line) => line.trim()).find((line) => line.startsWith("Warning:"));
+  return warning || null;
+}
+
+function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 
 async function declaredExtensions(): Promise<string[]> {
   const packageJson = JSON.parse(await readFile(join(REPO_DIR, "package.json"), "utf8")) as { pi?: { extensions?: unknown } };
